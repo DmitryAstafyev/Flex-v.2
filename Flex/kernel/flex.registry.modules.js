@@ -39,6 +39,8 @@
                 },
                 /// <field type = 'function'>Controller of templates</field>
                 templates   : {  source: 'KERNEL::flex.ui.templates.js' },
+                /// <field type = 'function'>Controller of patterns</field>
+                patterns    : {  source: 'KERNEL::flex.ui.patterns.js' },
                 /// <field type = 'function'>Controller of scrollbox</field>
                 scrollbox   : {  source : 'KERNEL::flex.ui.scrollbox.js', hash : 'HASHPROPERTY' },
                 /// <field type = 'function'>Controller of itemsbox</field>

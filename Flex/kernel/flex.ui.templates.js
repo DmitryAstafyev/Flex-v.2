@@ -49,6 +49,12 @@
                 tags            : {
                     FLEX_TEMPLATE       : 'flex-template',
                     FLEX_TEMPLATE_MARK  : 'flex-template-mark',
+                },
+                consts          : {
+                    statuses    : {
+                        SUCCESS : '1',
+                        FAIL    : '0',
+                    }
                 }
             };
             transport = {
@@ -96,14 +102,14 @@
                         success     : function (url, template, track_url, tracker_id, callbacks) {
                             var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PRELOAD_TRACKER, {});
                             if (storage[tracker_id]) {
-                                storage[tracker_id][track_url].status = 'success';
+                                storage[tracker_id][track_url].status = settings.consts.statuses.SUCCESS;
                                 transport.preload.tracker.tryFinish(tracker_id, callbacks);
                             }
                         },
                         fail        : function (url, template, track_url, tracker_id, callbacks) {
                             var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PRELOAD_TRACKER, {});
                             if (storage[tracker_id]) {
-                                storage[tracker_id][track_url].status = 'fail';
+                                storage[tracker_id][track_url].status = settings.consts.statuses.FAIL;
                                 transport.preload.tracker.tryFinish(tracker_id, callbacks);
                             }
                         },
@@ -127,10 +133,10 @@
                             if (storage[tracker_id]) {
                                 for (var key in storage[tracker_id]) {
                                     switch (storage[tracker_id][key].status) {
-                                        case 'success':
+                                        case settings.consts.statuses.SUCCESS:
                                             success.push(storage[tracker_id].url);
                                             break;
-                                        case 'fail':
+                                        case settings.consts.statuses.FAIL:
                                             fail.push(storage[tracker_id].url);
                                             break;
                                         case false:

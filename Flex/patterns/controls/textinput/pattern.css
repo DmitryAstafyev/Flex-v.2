@@ -1,0 +1,29 @@
+﻿div[data-type="TextInput.Wrapper"]{
+    position:relative;
+    width   :100%;
+    height  : 2rem;
+    margin  : 0.5rem 0;
+}
+div[data-type="TextInput.Container"]{
+    position:absolute;
+    top     :0;
+    bottom  :0;
+    left    :0.5rem;
+    right   :0.5rem;
+}
+div[data-type="TextInput.Container"] input[data-type="TextInput"]{
+    display     :block;
+    position    :absolute;
+    width       :100%;
+    height      :100%;
+    font-size   :1rem;
+    font-family :'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', 'DejaVu Sans Condensed', sans-serif;
+    padding     :0;
+    margin      :0;
+    color       :rgb(30,30,30);
+    outline     :none;
+    border      :dotted thin rgb(30,30,30);
+}
+div[data-type="TextInput.Container"] input[data-type="TextInput"]:focus{
+    border      :solid thin rgb(30,30,30);
+}

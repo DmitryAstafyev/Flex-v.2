@@ -10,7 +10,7 @@
             flex.init({
                 resources: {
                     MODULES         : [
-                        'flex.presentation', 'flex.binds'
+                        'flex.presentation', 'flex.binds', 'flex.ui.patterns'
                     ],
                     EXTERNAL        : [
                         { url: '/program/body.css'  },

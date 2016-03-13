@@ -161,6 +161,9 @@
                     logs.log('[CORE]:: flex was initialized before. Initialization can be done only once per session.', logs.types.WARNING);
                 }
             },
+            get         : function () {
+                return config.defaults;
+            }
         };
         coreEvents      = {
             onFlexLoad: function () {
@@ -781,11 +784,36 @@
                     ///         [function || object]    prototype                           &#13;&#10;
                     ///     }</param>
                     ///     <returns type="object">Instance of class</returns>
+                    /*
+                    =============EXAMPLE=============
+                        pattern = flex.oop.classes.create({
+                            constr      : function () {
+                                this.one = 'one';
+                            },
+                            privates    : {
+                                two     : 'two',
+                                three   : 'three'
+                            },
+                            prototype   : function (privates) {
+                                var self        = this,         //->one
+                                    privates    = privates;     //->two; ->three
+                                var show = function () {
+                                    alert(self.one);
+                                    alert(privates.two);
+                                    alert(privates.three);
+                                };
+                                return {
+                                    show : show
+                                };
+                            }
+                        });
+                    =============EXAMPLE=============
+                    */
                     var constr      = typeof parameters.constr  === 'function'  ? parameters.constr     : function () { },
                         privates    = parameters.privates       !== void 0      ? parameters.privates   : null,
                         prototype   = parameters.prototype      !== void 0      ? parameters.prototype  : {};
                     if (!(this instanceof oop.classes.create)) {
-                        constr.prototype = typeof prototype === 'function' ? prototype.call(privates) : prototype;
+                        constr.prototype = typeof prototype === 'function' ? prototype.call(new constr(), privates) : prototype;
                         return new constr();
                     } else {
                         throw Error('Method [flex.oop.classes.create] cannot be used with derective NEW');
@@ -882,7 +910,7 @@
                             Array.prototype.forEach.call(
                                 property,
                                 function (item) {
-                                    if (item instanceof Array === false && typeof item !== 'object' && typeof item !== 'function') {
+                                    if (!(item instanceof Array) && typeof item !== 'object' && typeof item !== 'function') {
                                         result.push(item);
                                     } else {
                                         result.push(copyProperty(item));
@@ -1180,6 +1208,9 @@
                     });
                     wrappers.prototypes.add.object('findBy',    function (path, value, multiple) {
                         return oop.objects.findBy(this.target, path, value, multiple);
+                    });
+                    wrappers.prototypes.add.object('createInstanceClass', function () {
+                        return oop.classes.create(this.target);
                     });
                 }
             }
@@ -3732,7 +3763,7 @@
             }
         };
         system          = {
-            handle      : function (handle_body, handle_arguments, call_point, this_argument) {
+            handle      : function (handle_body, handle_arguments, call_point, this_argument, safely) {
                 /// <signature>
                 ///     <summary>Run function in safely mode</summary>
                 ///     <param name="body"          type="function" >Handle</param>
@@ -3759,28 +3790,45 @@
                 ///     <param name="this"          type="object"   >Context of handle</param>
                 ///     <returns type="any">Return of handle</returns>
                 /// </signature>
-                var handle_body         = handle_body || null,
-                    handle_arguments    = handle_arguments || null,
-                    call_point          = call_point || null,
-                    this_argument       = this_argument || null;
-                if (handle_body !== null) {
-                    try {
-                        if (handle_arguments === null) {
-                            return handle_body.call(this_argument);
+                /// <signature>
+                ///     <summary>Run function in safely mode</summary>
+                ///     <param name="body"          type="function" >Handle</param>
+                ///     <param name="arguments"     type="any"      >Arguments for handle</param>
+                ///     <param name="call_point"    type="string"   >Text for log message.</param>
+                ///     <param name="this"          type="object"   >Context of handle</param>
+                ///     <param name="safely"        type="boolean"  >Wrap into try / catch </param>
+                ///     <returns type="any">Return of handle</returns>
+                /// </signature>
+                function proceed() {
+                    if (handle_arguments === null) {
+                        return handle_body.call(this_argument);
+                    } else {
+                        if (typeof handle_arguments.length === "number" && typeof handle_arguments === "object") {
+                            return handle_body.apply(this_argument, handle_arguments);
                         } else {
-                            if (typeof handle_arguments.length === "number" && typeof handle_arguments === "object") {
-                                return handle_body.apply(this_argument, handle_arguments);
-                            } else {
-                                return handle_body.call(this_argument, handle_arguments);
-                            }
+                            return handle_body.call(this_argument, handle_arguments);
                         }
-                    } catch (e) {
-                        logs.log(
-                            "Initializer runFunction method catch error: \r\n" +
-                            logs.parseError(e) + "\r\n Call point: " + call_point,
-                            logs.types.WARNING
-                        );
-                        return null;
+                    }
+                };
+                var handle_body         = handle_body       || null,
+                    handle_arguments    = handle_arguments  || null,
+                    call_point          = call_point        || null,
+                    this_argument       = this_argument     || null,
+                    safely              = safely            || false;
+                if (handle_body !== null) {
+                    if (safely) {
+                        try {
+                            proceed();
+                        } catch (e) {
+                            logs.log(
+                                "Initializer runFunction method catch error: \r\n" +
+                                logs.parseError(e) + "\r\n Call point: " + call_point,
+                                logs.types.WARNING
+                            );
+                            return null;
+                        }
+                    } else {
+                        proceed();
                     }
                 }
                 return null;
@@ -4261,6 +4309,8 @@
                         }
                     },
                     getCurrentSRC   : function () {
+                        ///     <summary>Try to get URL of current (running) script</summary>
+                        ///     <returns type="STRING">URL</returns>
                         var urls = null;
                         try {
                             throw new Error('Script URL detection');
@@ -4937,8 +4987,9 @@
                         adoption: system.resources.css.adoption,
                     },
                     js  : {
-                        connect : system.resources.js.connect,
-                        adoption: system.resources.js.adoption,
+                        connect         : system.resources.js.connect,
+                        adoption        : system.resources.js.adoption,
+                        getCurrentSRC   : system.resources.js.getCurrentSRC
                     }
                 }
             },
@@ -4959,7 +5010,8 @@
             hashes          : {
                 get     : hashes.get,
                 update  : hashes.update.add
-            }
+            },
+            config          : config.get
         };
         //Settings of flex
         config.init();
@@ -5041,8 +5093,9 @@
                         adoption: privates.resources.attach.css.adoption,
                     },
                     js  : {
-                        connect : privates.resources.attach.js.connect,
-                        adoption: privates.resources.attach.js.adoption,
+                        connect         : privates.resources.attach.js.connect,
+                        adoption        : privates.resources.attach.js.adoption,
+                        getCurrentSRC   : privates.resources.attach.js.getCurrentSRC
                     }
                 }
             },
@@ -5085,7 +5138,7 @@
                     boolean : privates.callers.define.boolean,
                 }
             },
-            _storage: overhead.globaly.storage
+            config          : privates.config
         };
     }());
     //Core of flex is in global space
