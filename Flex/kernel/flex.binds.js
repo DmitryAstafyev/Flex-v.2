@@ -15,14 +15,16 @@
     if (flex !== void 0) {
         var protofunction = function () { };
         protofunction.prototype = function () {
-            var objects     = null,
-                attrs       = null,
-                privates    = null,
-                helpers     = null,
-                callers     = null,
-                settings    = null,
-                errors      = null,
-                support     = null;
+            var objects         = null,
+                attrs           = null,
+                props           = null,
+                mutationCross   = null,
+                privates        = null,
+                helpers         = null,
+                callers         = null,
+                settings        = null,
+                errors          = null,
+                support         = null;
             settings    = {
                 objects : {
                     STORAGE_PROPERTY    : 'flex.object.bind.storage',
@@ -31,6 +33,10 @@
                 attrs   : {
                     STORAGE_PROPERTY    : 'flex.attrs.bind.storage',
                     HANDLE_ID_PROPERTY  : 'flex.attrs.bind.handle.id'
+                },
+                props: {
+                    STORAGE_PROPERTY    : 'flex.props.bind.storage',
+                    HANDLE_ID_PROPERTY  : 'flex.props.bind.handle.id'
                 },
             };
             errors      = {
@@ -225,9 +231,6 @@
             };
             //Binding attributes of nodes
             attrs       = {
-                init    : function(){
-                    attrs.cross.attach = attrs.cross.attach();
-                },
                 storage : {
                     create : function (node) {
                         var Storage = function (node) {
@@ -237,16 +240,31 @@
                             };
                         Storage.prototype = {
                             init            : function (){
-                                this._destroy = attrs.cross.attach(node, this.handle, this);
+                                this._destroy = mutationCross.attach(node,
+                                    this.handle,
+                                    this,
+                                    {
+                                        attributes              : true,
+                                        childList               : false,
+                                        subtree                 : false,
+                                        characterData           : true,
+                                        attributeOldValue       : false,
+                                        characterDataOldValue   : false
+                                    }
+                                );
                             },
                             handle          : function (attr, mutation) {
-                                var self = this;
+                                var self        = this,
+                                    attr_value  = null;
                                 if (this.binds[attr]) {
-                                    this.binds[attr].previous   = this.binds[attr].current;
-                                    this.binds[attr].current    = this.node.getAttribute(attr);
-                                    _object(this.binds[attr].handles).forEach(function (id, handle) {
-                                        handle.call(self.node, attr, self.binds[attr].previous, self.binds[attr].current, mutation, id);
-                                    });
+                                    attr_value = this.node.getAttribute(attr);
+                                    if (attr_value !== this.binds[attr].current) {
+                                        this.binds[attr].previous   = this.binds[attr].current;
+                                        this.binds[attr].current    = attr_value;
+                                        _object(this.binds[attr].handles).forEach(function (id, handle) {
+                                            handle.call(self.node, attr, self.binds[attr].current, self.binds[attr].previous, mutation, id);
+                                        });
+                                    }
                                 }
                             },
                             make            : function (attr) {
@@ -314,7 +332,7 @@
                     /// </signature>
                     var storage = settings.attrs.STORAGE_PROPERTY,
                         value   = null;
-                    if (attrs.cross.attach !== null) {
+                    if (mutationCross.attach !== null) {
                         if (node !== void 0 && typeof attr === 'string' && typeof handle === 'function') {
                             if (node.nodeName) {
                                 if (!node[storage]) {
@@ -374,71 +392,233 @@
                     }
                     throw 'attrs.unbind::' + errors.objects.INCORRECT_ARGUMENTS;
                 },
-                cross: {
-                    //Modern
-                    mutationObserver    : function (node, handle, self) {
-                        var MutationObserver    = window.MutationObserver || window.WebKitMutationObserver,
-                            observer            = null;
-                        observer = new MutationObserver(function (mutations) {
-                            mutations.forEach(function (mutation) {
-                                handle.call(self, mutation.attributeName, mutation);
-                            });
-                        });
-                        observer.observe(node, {
-                            attributes              : true,
-                            childList               : false,
-                            subtree                 : false,
-                            characterData           : true,
-                            attributeOldValue       : false,
-                            characterDataOldValue   : false
-                        });
-                        //Return distroy / disconnect method
-                        return function () {
-                            observer.disconnect();
+            };
+            //Binding properties of nodes
+            props       = {
+                storage : {
+                    create : function (node) {
+                        var Storage = function (node) {
+                                this.node       = node;
+                                this.binds      = {};
+                                this._destroy   = null;
+                            };
+                        Storage.prototype = {
+                            init            : function (){
+                                this._destroy = mutationCross.attach(
+                                    node,
+                                    this.handle,
+                                    this,
+                                    {
+                                        attributes              : true,
+                                        childList               : true,
+                                        subtree                 : true,
+                                        characterData           : true,
+                                        attributeOldValue       : false,
+                                        characterDataOldValue   : false
+                                    }
+                                );
+                            },
+                            handle          : function (attr, mutation) {
+                                var self = this;
+                                _object(this.binds).forEach(function (prop, bind_data) {
+                                    var prop_value = self.node[prop];
+                                    if (prop_value !== self.binds[prop].current) {
+                                        self.binds[prop].previous   = self.binds[prop].current;
+                                        self.binds[prop].current    = prop_value;
+                                        _object(self.binds[prop].handles).forEach(function (id, handle) {
+                                            handle.call(self.node, prop, self.binds[prop].current, self.binds[prop].previous, mutation, id);
+                                        });
+                                    }
+                                });
+                            },
+                            make            : function (prop) {
+                                if (!this.binds[prop]) {
+                                    this.binds[prop] = {
+                                        handles     : {},
+                                        previous    : null,
+                                        current     : this.node[prop]
+                                    };
+                                }
+                            },
+                            add             : function (prop, handle) {
+                                var id = flex.unique();
+                                //Save handle ID in handle
+                                handle[settings.props.HANDLE_ID_PROPERTY] = id;
+                                //Add handle in storage
+                                this.binds[prop].handles[id] = handle;
+                                //Return handle ID
+                                return id;
+                            },
+                            remove          : function (prop, id) {
+                                var result = null;
+                                if (this.binds[prop]) {
+                                    if (this.binds[prop].handles[id]) {
+                                        delete this.binds[prop].handles[id];
+                                        if (Object.keys(this.binds[prop].handles).length === 0) {
+                                            result = delete this.binds[prop];
+                                            this.destroy();
+                                            return result;
+                                        }
+                                    }
+                                }
+                                return result;
+                            },
+                            kill            : function (prop) {
+                                var result = null;
+                                if (this.binds[prop]) {
+                                    result = delete this.binds[prop];
+                                    this.destroy();
+                                    return result;
+                                }
+                                return result;
+                            },
+                            isPropReady     : function (prop) {
+                                return this.binds[prop] !== void 0 ? true : false;
+                            },
+                            destroy         : function (){
+                                if (Object.keys(this.binds).length === 0) {
+                                    this._destroy();
+                                    return delete this.node[settings.props.STORAGE_PROPERTY];
+                                }
+                                return false;
+                            },
                         };
-                    },
-                    //Old
-                    DOMAttrModified     : function (node, handle, self) {
-                        flex.events.DOM.add(node, 'DOMAttrModified', function (mutation) {
-                            handle.call(self, event.attrName, mutation);
-                        });
-                        //Return distroy / disconnect method
-                        return function () {
-                            //Do nothing
-                        };
-                    },
-                    //IE < 11
-                    onPropertyChange    : function (node, handle, self) {
-                        flex.events.DOM.add(node, 'propertychange', function (mutation) {
-                            handle.call(self, event.attributeName, mutation);
-                        });
-                        //Return distroy / disconnect method
-                        return function () {
-                            //Do nothing
-                        };
-                    },
-                    //Common accessor to browser API
-                    attach              : function () {
-                        function isDOMAttrModified() {
-                            var node = document.createElement('DIV'),
-                                flag = false;
-                            flex.events.DOM.add(node, 'DOMAttrModified', function () {
-                                flag = true;
-                            });
-                            node.setAttribute('id', 'test');
-                            return flag;
-                        };
-                        if (window.MutationObserver || window.WebKitMutationObserver) {
-                            return attrs.cross.mutationObserver;
+                        return new Storage(node);
+                    }
+                },
+                bind    : function (node, prop, handle) {
+                    /// <signature>
+                    ///     <summary>Bind handle to prop of node</summary>
+                    ///     <param name="node"      type="DOMNode"  >Target node</param>
+                    ///     <param name="prop"      type="STRING"   >Prop name</param>
+                    ///     <param name="handle"    type="FUNCTION" >Handle of prop changing</param>
+                    ///     <returns type="STRING"/>
+                    /// </signature>
+                    var storage = settings.props.STORAGE_PROPERTY,
+                        value   = null;
+                    if (mutationCross.attach !== null) {
+                        if (node !== void 0 && typeof prop === 'string' && typeof handle === 'function') {
+                            if (node.nodeName) {
+                                if (node[prop] !== void 0) {
+                                    if (!node[storage]) {
+                                        //Node isn't listening
+                                        node[storage] = props.storage.create(node);
+                                        node[storage].init();
+                                    }
+                                    storage = node[storage];
+                                    //Prepare prop if needed
+                                    if (!storage.isPropReady(prop)) {
+                                        //First handle for prop
+                                        storage.make(prop);
+                                    }
+                                    //Add handle
+                                    return storage.add(prop, handle);
+                                }
+                            }
                         }
-                        if (isDOMAttrModified()) {
-                            return attrs.cross.DOMAttrModified;
-                        }
-                        if ('onpropertychange' in document.body) {
-                            return attrs.cross.onPropertyChange;
+                        throw 'props.bind::' + errors.objects.INCORRECT_ARGUMENTS;
+                    }
+                },
+                unbind  : function (node, prop, id) {
+                    /// <signature>
+                    ///     <summary>Unbind handle to prop of node by handle's ID</summary>
+                    ///     <param name="node"      type="DOMNode"  >Target node</param>
+                    ///     <param name="prop"      type="STRING"   >Prop name</param>
+                    ///     <param name="id"        type="STRING"   >ID of handle</param>
+                    ///     <returns type="BOOLEAN"/>
+                    /// </signature>
+                    var storage = settings.props.STORAGE_PROPERTY;
+                    if (typeof node === 'object' && typeof prop === 'string' && typeof id === 'string') {
+                        if (node[storage]) {
+                            storage = node[storage];
+                            if (storage.isPropReady(prop)) {
+                                return storage.remove(prop, id);
+                            }
                         }
                         return null;
                     }
+                    throw 'props.unbind::' + errors.objects.INCORRECT_ARGUMENTS;
+                },
+                kill    : function (node, prop) {
+                    /// <signature>
+                    ///     <summary>Unbind all handles, which was attached to prop of node</summary>
+                    ///     <param name="node"      type="DOMNode"  >Target node</param>
+                    ///     <param name="prop"      type="STRING"   >Prop name</param>
+                    ///     <returns type="BOOLEAN"/>
+                    /// </signature>
+                    var storage = settings.props.STORAGE_PROPERTY;
+                    if (typeof node === 'object' && typeof prop === 'string') {
+                        if (node[storage]) {
+                            storage = node[storage];
+                            if (storage.isPropReady(prop)) {
+                                return storage.kill(prop);
+                            }
+                        }
+                        return null;
+                    }
+                    throw 'props.unbind::' + errors.objects.INCORRECT_ARGUMENTS;
+                },
+            };
+            mutationCross = {
+                init: function () {
+                    mutationCross.attach = mutationCross.attach();
+                },
+                //Modern
+                mutationObserver    : function (node, handle, self, parameters) {
+                    var MutationObserver    = window.MutationObserver || window.WebKitMutationObserver,
+                        observer            = null;
+                    observer = new MutationObserver(function (mutations) {
+                        mutations.forEach(function (mutation) {
+                            handle.call(self, mutation.attributeName, mutation);
+                        });
+                    });
+                    observer.observe(node, parameters);
+                    //Return distroy / disconnect method
+                    return function () {
+                        observer.disconnect();
+                    };
+                },
+                //Old
+                DOMAttrModified     : function (node, handle, self) {
+                    flex.events.DOM.add(node, 'DOMAttrModified', function (mutation) {
+                        handle.call(self, event.attrName, mutation);
+                    });
+                    //Return distroy / disconnect method
+                    return function () {
+                        //Do nothing
+                    };
+                },
+                //IE < 11
+                onPropertyChange    : function (node, handle, self) {
+                    flex.events.DOM.add(node, 'propertychange', function (mutation) {
+                        handle.call(self, event.attributeName, mutation);
+                    });
+                    //Return distroy / disconnect method
+                    return function () {
+                        //Do nothing
+                    };
+                },
+                //Common accessor to browser API
+                attach              : function () {
+                    function isDOMAttrModified() {
+                        var node = document.createElement('DIV'),
+                            flag = false;
+                        flex.events.DOM.add(node, 'DOMAttrModified', function () {
+                            flag = true;
+                        });
+                        node.setAttribute('id', 'test');
+                        return flag;
+                    };
+                    if (window.MutationObserver || window.WebKitMutationObserver) {
+                        return mutationCross.mutationObserver;
+                    }
+                    if (isDOMAttrModified()) {
+                        return mutationCross.DOMAttrModified;
+                    }
+                    if ('onpropertychange' in document.body) {
+                        return mutationCross.onPropertyChange;
+                    }
+                    return null;
                 }
             };
             helpers     = {
@@ -489,6 +669,41 @@
                         });
                         return result;
                     });
+
+                    flex.callers.define.node('bindingProps.bind',       function (prop, handle) {
+                        return props.bind(this.target, prop, handle);
+                    });
+                    flex.callers.define.node('bindingProps.unbind',     function (prop, id) {
+                        return props.unbind(this.target, prop, id);
+                    });
+                    flex.callers.define.node('bindingProps.kill',       function (prop) {
+                        return props.kill(this.target, prop);
+                    });
+
+                    flex.callers.define.nodes('bindingProps.bind',      function (prop, handle) {
+                        var result = [];
+                        SelectorClass();
+                        Array.prototype.forEach.call(this.target, function (target) {
+                            result.push(props.bind(target, prop, handle));
+                        });
+                        return result;
+                    });
+                    flex.callers.define.nodes('bindingProps.unbind',    function (prop, id) {
+                        var result = [];
+                        SelectorClass();
+                        Array.prototype.forEach.call(this.target, function (target) {
+                            result.push(props.unbind(target, prop, id));
+                        });
+                        return result;
+                    });
+                    flex.callers.define.nodes('bindingProps.kill',      function (prop) {
+                        var result = [];
+                        SelectorClass();
+                        Array.prototype.forEach.call(this.target, function (target) {
+                            result.push(props.kill(target, prop));
+                        });
+                        return result;
+                    });
                 }
             };
             support     = {
@@ -496,13 +711,13 @@
                     if (!Object.defineProperty) {
                         throw errors.support.DEFINE_PROPERTY;
                     }
-                    if (attrs.cross.attach === null) {
+                    if (mutationCross.attach === null) {
                         throw errors.support.MUTATION_SCANNING;
                     }
                 }
             };
             //Init 
-            attrs.init();
+            mutationCross.init();
             //Initialization of callers
             callers.init();
             //Check support

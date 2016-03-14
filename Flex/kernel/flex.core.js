@@ -1923,6 +1923,8 @@
                                             modules.repository.add(parameters);
                                             //Check references of this library
                                             modules.reference.check(parameters.name);
+                                            //Start events
+                                            system.handle(parameters.onBeforeAttach);
                                             //Check resources of module and continue after resources will be loaded
                                             modules.resources.check(
                                                 parameters.name,
@@ -1932,6 +1934,8 @@
                                                     modules.reference.pending();
                                                     //Mark as done
                                                     overhead.register.done(options.register.MODULES_HISTROY, parameters.name);
+                                                    //Start events
+                                                    system.handle(parameters.onAfterAttach);
                                                 }
                                             );
                                             logs.log('[MODULES]:: [' + parameters.name + '] was initialized.', logs.types.KERNEL_LOGS);

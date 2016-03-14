@@ -24,6 +24,7 @@
                 privates    = null,
                 settings    = null,
                 transport   = null,
+                bindsEvents = null,
                 resources   = null,
                 storage     = null,
                 template    = null,
@@ -52,6 +53,7 @@
                     HOOK_OPEN       : '\\{\\{',
                     HOOK_CLOSE      : '\\}\\}',
                     HOOK_BORDERS    : /\{\{|\}\}/gi,
+                    GROUP_PROPERTY  : /__\w*?__/gi
                 },
                 storage         : {
                     USE_LOCALSTORAGE        : true,
@@ -60,6 +62,7 @@
                     CSS_ATTACHED_JOURNAL    : 'FLEX_UI_PATTERNS_CSS_JOURNAL',
                     JS_ATTACHED_JOURNAL     : 'JS_ATTACHED_JOURNAL',
                     PRELOAD_TRACKER         : 'FLEX_UI_PATTERNS_PRELOAD_TRACKER',
+                    NODE_BINDING_DATA       : 'FLEX_PATTERNS_BINDINGS_DATA'
                 },
                 tags            : {
                     FLEX_PATTERN        : 'flex-pattern',
@@ -300,6 +303,53 @@
                         }
                     }
                     return null;
+                }
+            };
+            bindsEvents      = {
+                data    : {
+                    value: [
+                        //Group #1
+                        {
+                            nodes   : ['input', 'textarea'],
+                            event   : 'change',
+                            getter  : function () { return this.value; },
+                            setter  : function (value) { this.value = value; }
+                        }
+                    ],
+                },
+                assing  : function (node, prop_name, handle) {
+                    var node_name   = node.nodeName.toLowerCase(),
+                        group       = null;
+                    if (bindsEvents.data[prop_name] !== void 0) {
+                        bindsEvents.data[prop_name].forEach(function (_group) {
+                            if (_group.nodes.indexOf(node_name) !== -1) {
+                                group = _group;
+                            }
+                        });
+                        if (group !== null) {
+                            (function (event, node, getter, setter, handle) {
+                                _node(node).events().add(event, function (event) {
+                                    handle.call(node, event, getter, setter);
+                                });
+                            }(group.event, node, group.getter.bind(node), group.setter.bind(node), handle));
+                        }
+                    }
+                    return false;
+                },
+                isPossible: function (node, prop_name) {
+                    var node_name = node.nodeName.toLowerCase();
+                    if (bindsEvents.data[prop_name] !== void 0) {
+                        try{
+                            bindsEvents.data[prop_name].forEach(function (_group) {
+                                if (_group.nodes.indexOf(node_name) !== -1) {
+                                    throw 'found';
+                                }
+                            });
+                        } catch (e) {
+                            return e === 'found' ? true : false;
+                        }
+                    }
+                    return false;
                 }
             };
             template    = {
@@ -995,6 +1045,7 @@
                                 };
                                 model = {
                                     model   : {},
+                                    binds   : null,
                                     create  : function (clone) {
                                         function getPath(node, path) {
                                             var path = path === void 0 ? [] : path;
@@ -1043,8 +1094,113 @@
                                             });
                                         }
                                     },
+                                    bind    : function (){
+                                        function clearTest(reg, str) {
+                                            reg.lastIndex = 0;
+                                            return reg.test(str);
+                                        };
+                                        function bind(group, binds) {
+                                            function executeHandles(hanldes, _this, arg_1, arg_2) {
+                                                if (hanldes instanceof Array) {
+                                                    hanldes.forEach(function (handle) {
+                                                        handle.call(_this, arg_1, arg_2);
+                                                    });
+                                                }
+                                            };
+                                            function isOutcome(node, outcome) {
+                                                var outcome = typeof outcome === 'boolean' ? outcome : false;
+                                                if (node[settings.storage.NODE_BINDING_DATA].outcome_call === true) {
+                                                    node[settings.storage.NODE_BINDING_DATA].outcome_call = false;
+                                                    return true;
+                                                } else {
+                                                    if (outcome) {
+                                                        node[settings.storage.NODE_BINDING_DATA].outcome_call = true;
+                                                    }
+                                                    return false;
+                                                }
+                                            };
+                                            function income(key, value, binds, group, prop) {
+                                                if (value.attr !== null) {
+                                                    (function (binds, key, node, attr_name, hanldes) {
+                                                        _node(node).bindingAttrs().bind(attr_name, function (attr_name, current, previous) {
+                                                            if (!isOutcome(node)) {
+                                                                binds[key] = current;
+                                                                executeHandles(hanldes, this, attr_name, current);
+                                                            }
+                                                        });
+                                                    }(binds, key, value.node, value.attr, group[key].hanldes));
+                                                }
+                                                if (bindsEvents.isPossible(value.node, prop)) {
+                                                    (function (binds, key, node, attr_name, hanldes) {
+                                                        bindsEvents.assing(value.node, prop, function (event, getter, setter) {
+                                                            var current = null;
+                                                            if (!isOutcome(node)) {
+                                                                current     = getter();
+                                                                binds[key]  = current;
+                                                                executeHandles(hanldes, this, attr_name, current);
+                                                            }
+                                                        });
+                                                    }(binds, key, value.node, value.attr, group[key].hanldes));
+                                                } else {
+                                                    if (value.prop !== null) {
+                                                        (function (binds, key, node, prop, hanldes) {
+                                                            _node(node).bindingProps().bind(prop, function (prop, current, previous) {
+                                                                if (!isOutcome(node)) {
+                                                                    binds[key] = current;
+                                                                    executeHandles(hanldes, this, prop, current);
+                                                                }
+                                                            });
+                                                        }(binds, key, value.node, value.prop, group[key].hanldes));
+                                                    }
+                                                }
+                                            };
+                                            function outcome(key, value, binds, group, prop) {
+                                                if (value.attr !== null) {
+                                                    (function (binds, key, node, attr_name, hanldes) {
+                                                        _object(binds).binding().bind(key, function (current, previous) {
+                                                            if (!isOutcome(node, true)) {
+                                                                node.setAttribute(attr_name, current);
+                                                                executeHandles(hanldes, node, attr_name, current);
+                                                            }
+                                                        });
+                                                    }(binds, key, value.node, value.attr, group[key].hanldes));
+                                                } else {
+                                                    if (value.node[prop] !== void 0) {
+                                                        (function (binds, key, node, prop, hanldes) {
+                                                            _object(binds).binding().bind(key, function (current, previous) {
+                                                                if (!isOutcome(node, true)) {
+                                                                    node[prop] = current;
+                                                                    executeHandles(hanldes, node, prop, current);
+                                                                }
+                                                            });
+                                                        }(binds, key, value.node, prop, group[key].hanldes));
+                                                    }
+                                                }
+                                            };
+                                            _object(group).forEach(function (key, value) {
+                                                var prop = value.prop !== null ? value.prop : value.attr;
+                                                if (clearTest(settings.regs.GROUP_PROPERTY, key)) {
+                                                    binds[key] = {};
+                                                    bind(group[key], binds[key]);
+                                                } else {
+                                                    binds[key]                                      = null;
+                                                    group[key].hanldes                              = [];
+                                                    value.node[settings.storage.NODE_BINDING_DATA]  = {
+                                                        outcome_call : false
+                                                    };
+                                                    income(key, value, binds, group, prop);
+                                                    outcome (key, value, binds, group, prop);
+                                                }
+                                            });
+                                        };
+                                        model.binds = {};
+                                        if (model.model !== null) {
+                                            bind(model.model, model.binds);
+                                        }
+                                    },
                                     reset   : function(){
-                                        model.model = {};
+                                        model.model     = {};
+                                        model.binds     = null;
                                     }
                                 };
                                 wrappers = {
@@ -1094,6 +1250,7 @@
                                             if (is_parent) {
                                                 wrappers.   remove(clone);
                                                 model.      clear (clone);
+                                                model.      bind();
                                             }
                                             Array.prototype.forEach.call(clone.childNodes, function (node) {
                                                 result.push(node);
@@ -1103,7 +1260,7 @@
                                     },
                                     handle  : function (handle) {
                                         if (typeof handle === 'function') {
-                                            handle(self.url, model.model, map.map);
+                                            handle(self.url, model.binds, model.model);
                                         }
                                     }
                                 };
@@ -1390,6 +1547,8 @@
             };
             //Init callers
             callers.init();
+            flex.libraries.events.create();
+            flex.libraries.binds.create();
             //Private part
             privates    = {
                 get         : template.init,
@@ -1410,7 +1569,10 @@
             name            : 'ui.patterns',
             protofunction   : protofunction,
             reference       : function () {
-                flex.libraries.html();
+                flex.libraries.events();
+                flex.libraries.binds();
+            },
+            onAfterAttach: function () {
             }
         });
     }
