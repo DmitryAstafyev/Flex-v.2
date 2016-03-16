@@ -1073,14 +1073,13 @@
                                                 if (models instanceof Array) {
                                                     models.forEach(function (model) {
                                                         if (destination[model.model] === void 0) {
-                                                            destination[model.model] = {
-                                                                node: model_node,
-                                                                attr: model.attr === void 0 ? null : model.attr,
-                                                                prop: model.prop === void 0 ? null : model.prop
-                                                            };
-                                                        } else {
-                                                            flex.logs.log('[flex.ui.patterns] Conflict with bindings names. Template [' + self.url + '], binding name [' + model.model + '].', flex.logs.types.LOGICAL);
+                                                            destination[model.model] = [];
                                                         }
+                                                        destination[model.model].push({
+                                                            node    : model_node,
+                                                            attr    : model.attr === void 0 ? null : model.attr,
+                                                            prop    : model.prop === void 0 ? null : model.prop
+                                                        });
                                                     });
                                                 }
                                             });
@@ -1100,96 +1099,113 @@
                                             return reg.test(str);
                                         };
                                         function bind(group, binds) {
-                                            function executeHandles(hanldes, _this, arg_1, arg_2) {
-                                                if (hanldes instanceof Array) {
-                                                    hanldes.forEach(function (handle) {
-                                                        handle.call(_this, arg_1, arg_2);
+                                            function executeHandles(handles, _this, arg_1, arg_2) {
+                                                var state_code = arg_1 + arg_2;
+                                                if (handles instanceof Array) {
+                                                    handles.forEach(function (handle) {
+                                                        if (handle.state_code !== state_code) {
+                                                            handle.state_code = state_code;
+                                                            handle.call(_this, arg_1, arg_2);
+                                                        }
                                                     });
                                                 }
                                             };
-                                            function isOutcome(node, outcome) {
-                                                var outcome = typeof outcome === 'boolean' ? outcome : false;
-                                                if (node[settings.storage.NODE_BINDING_DATA].outcome_call === true) {
-                                                    node[settings.storage.NODE_BINDING_DATA].outcome_call = false;
-                                                    return true;
-                                                } else {
-                                                    if (outcome) {
-                                                        node[settings.storage.NODE_BINDING_DATA].outcome_call = true;
-                                                    }
-                                                    return false;
-                                                }
-                                            };
-                                            function income(key, value, binds, group, prop) {
-                                                if (value.attr !== null) {
-                                                    (function (binds, key, node, attr_name, hanldes) {
+                                            function income(key, node, binds, group, prop) {
+                                                if (node.attr !== null) {
+                                                    (function (binds, key, node, attr_name, handles) {
                                                         _node(node).bindingAttrs().bind(attr_name, function (attr_name, current, previous) {
-                                                            if (!isOutcome(node)) {
+                                                            if (binds[key] !== current) {
                                                                 binds[key] = current;
-                                                                executeHandles(hanldes, this, attr_name, current);
+                                                                executeHandles(handles, this, attr_name, current);
                                                             }
                                                         });
-                                                    }(binds, key, value.node, value.attr, group[key].hanldes));
+                                                    }(binds, key, node.node, node.attr, group[key].handles));
                                                 }
-                                                if (bindsEvents.isPossible(value.node, prop)) {
-                                                    (function (binds, key, node, attr_name, hanldes) {
-                                                        bindsEvents.assing(value.node, prop, function (event, getter, setter) {
-                                                            var current = null;
-                                                            if (!isOutcome(node)) {
-                                                                current     = getter();
+                                                if (bindsEvents.isPossible(node.node, prop)) {
+                                                    (function (binds, key, node, attr_name, handles) {
+                                                        bindsEvents.assing(node, prop, function (event, getter, setter) {
+                                                            var current = getter();
+                                                            if (binds[key] !== current) {
                                                                 binds[key]  = current;
-                                                                executeHandles(hanldes, this, attr_name, current);
+                                                                executeHandles(handles, this, attr_name, current);
                                                             }
                                                         });
-                                                    }(binds, key, value.node, value.attr, group[key].hanldes));
+                                                    }(binds, key, node.node, node.attr, group[key].handles));
                                                 } else {
-                                                    if (value.prop !== null) {
-                                                        (function (binds, key, node, prop, hanldes) {
+                                                    if (node.prop !== null) {
+                                                        (function (binds, key, node, prop, handles) {
                                                             _node(node).bindingProps().bind(prop, function (prop, current, previous) {
-                                                                if (!isOutcome(node)) {
+                                                                if (binds[key] !== current) {
                                                                     binds[key] = current;
-                                                                    executeHandles(hanldes, this, prop, current);
+                                                                    executeHandles(handles, this, prop, current);
                                                                 }
                                                             });
-                                                        }(binds, key, value.node, value.prop, group[key].hanldes));
+                                                        }(binds, key, node.node, node.prop, group[key].handles));
                                                     }
                                                 }
                                             };
-                                            function outcome(key, value, binds, group, prop) {
-                                                if (value.attr !== null) {
-                                                    (function (binds, key, node, attr_name, hanldes) {
+                                            function outcome(key, node, binds, group, prop) {
+                                                if (node.attr !== null) {
+                                                    (function (binds, key, node, attr_name, handles) {
                                                         _object(binds).binding().bind(key, function (current, previous) {
-                                                            if (!isOutcome(node, true)) {
+                                                            var execute = false;
+                                                            if (node.getAttribute(attr_name) !== current) {
                                                                 node.setAttribute(attr_name, current);
-                                                                executeHandles(hanldes, node, attr_name, current);
+                                                                execute = true;
+                                                            }
+                                                            if (node[attr_name] !== void 0) {
+                                                                if (node[attr_name] !== current) {
+                                                                    node[attr_name] = current;
+                                                                    execute = true;
+                                                                }
+                                                            }
+                                                            if (execute) {
+                                                                executeHandles(handles, node, attr_name, current);
                                                             }
                                                         });
-                                                    }(binds, key, value.node, value.attr, group[key].hanldes));
+                                                    }(binds, key, node.node, node.attr, group[key].handles));
                                                 } else {
-                                                    if (value.node[prop] !== void 0) {
-                                                        (function (binds, key, node, prop, hanldes) {
+                                                    if (node.node[prop] !== void 0) {
+                                                        (function (binds, key, node, prop, handles) {
                                                             _object(binds).binding().bind(key, function (current, previous) {
-                                                                if (!isOutcome(node, true)) {
+                                                                if (node[prop] !== current) {
                                                                     node[prop] = current;
-                                                                    executeHandles(hanldes, node, prop, current);
+                                                                    executeHandles(handles, node, prop, current);
                                                                 }
                                                             });
-                                                        }(binds, key, value.node, prop, group[key].hanldes));
+                                                        }(binds, key, node.node, prop, group[key].handles));
                                                     }
                                                 }
                                             };
-                                            _object(group).forEach(function (key, value) {
-                                                var prop = value.prop !== null ? value.prop : value.attr;
+                                            _object(group).forEach(function (key, nodes) {
                                                 if (clearTest(settings.regs.GROUP_PROPERTY, key)) {
                                                     binds[key] = {};
                                                     bind(group[key], binds[key]);
                                                 } else {
-                                                    binds[key]                                      = null;
-                                                    group[key].hanldes                              = [];
-                                                    value.node[settings.storage.NODE_BINDING_DATA]  = {
-                                                        outcome_call : false
+                                                    group[key].handles  = [];
+                                                    binds[key]          = null;
+                                                    if (nodes instanceof Array) {
+                                                        nodes.forEach(function (node) {
+                                                            var prop = node.prop !== null ? node.prop : node.attr;
+                                                            node.node[settings.storage.NODE_BINDING_DATA] = {
+                                                                outcome_call: false
+                                                            };
+                                                            income  (key, node, binds, group, prop);
+                                                            outcome (key, node, binds, group, prop);
+                                                        });
+                                                    }
+                                                    group[key] = {
+                                                        addHandle   : function (handle) {
+                                                            handle.state_code = null;
+                                                            this.handles.push(handle);
+                                                        },
+                                                        removeHandle: function (handle) {
+                                                            this.handles.push(handle);
+                                                        },
+                                                        handles     : group[key].handles
                                                     };
-                                                    income(key, value, binds, group, prop);
-                                                    outcome (key, value, binds, group, prop);
+                                                    group[key].addHandle.   bind(group[key]);
+                                                    group[key].removeHandle.bind(group[key]);
                                                 }
                                             });
                                         };
