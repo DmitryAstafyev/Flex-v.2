@@ -791,8 +791,9 @@
                                 this.one = 'one';
                             },
                             privates    : {
-                                two     : 'two',
-                                three   : 'three'
+                                two         : 'two',
+                                three       : 'three',
+                                __instance  : instance //--> automaticaly attached: instance of class
                             },
                             prototype   : function (privates) {
                                 var self        = this,         //->one
@@ -810,11 +811,13 @@
                     =============EXAMPLE=============
                     */
                     var constr      = typeof parameters.constr  === 'function'  ? parameters.constr     : function () { },
-                        privates    = parameters.privates       !== void 0      ? parameters.privates   : null,
-                        prototype   = parameters.prototype      !== void 0      ? parameters.prototype  : {};
+                        privates    = parameters.privates       !== void 0      ? parameters.privates   : { },
+                        prototype   = parameters.prototype      !== void 0      ? parameters.prototype  : {},
+                        instance    = null;
                     if (!(this instanceof oop.classes.create)) {
-                        constr.prototype = typeof prototype === 'function' ? prototype.call(new constr(), privates) : prototype;
-                        return new constr();
+                        constr.prototype    = typeof prototype === 'function' ? prototype.call(new constr(), privates) : prototype;
+                        privates.__instance = new constr();
+                        return privates.__instance;
                     } else {
                         throw Error('Method [flex.oop.classes.create] cannot be used with derective NEW');
                     }

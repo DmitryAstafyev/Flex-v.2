@@ -390,7 +390,8 @@
                                     privates    = privates,
                                     render      = null,
                                     preload     = null,
-                                    getHooks    = null;
+                                    getHooks    = null,
+                                    setHooks    = null;
                                 render      = function (parent_pattern_id) {
                                     if (typeof parent_pattern_id === 'string') {
                                         privates.parameters.parent_pattern_id = parent_pattern_id;
@@ -412,10 +413,14 @@
                                         return null;
                                     }
                                 };
+                                setHooks    = function(hooks){
+                                    privates.parameters.hooks = hooks;
+                                };
                                 return {
                                     render      : render,
                                     preload     : preload,
-                                    getHooks    : getHooks
+                                    getHooks    : getHooks,
+                                    setHooks    : setHooks
                                 };
                             }
                         }).createInstanceClass();
@@ -437,7 +442,7 @@
                             //Execute callback
                             data.instance.handle(parameters.callbacks.before);
                             //Processing hooks
-                            template.set.hooks(parameters.hooks, parameters);
+                            template.set.hooks(parameters.hooks, parameters.pattern_id);
                             //Get nodes
                             data.template = data.instance.build(parameters.hooks, parameters.parent_pattern_id === void 0 ? true : false);
                         } else {
@@ -465,7 +470,10 @@
                                 }
                             }, parameters);
                         });
-                        return data.template;
+                        return {
+                            template    : data.template,
+                            instance    : data.instance
+                        };
                     };
                     function save(data, parameters) {
                         var _data = {
@@ -700,9 +708,9 @@
                 },
                 set         : {
                     storage             : {},
-                    hooks               : function (hooks, parameters) {
+                    hooks               : function (hooks, pattern_id) {
                         function isNode(something){
-                            if (something.nodeName && something.parentNode && something.childNodes){
+                            if (something.nodeName !== void 0 && something.parentNode !== void 0 && something.nodeType !== void 0) {
                                 return true;
                             }else{
                                 return false;
@@ -712,7 +720,7 @@
                             function getValue(something) {
                                 var value = '';
                                 if (template.isTemplate(something)) {
-                                    return getValue(something.render(parameters.pattern_id));
+                                    return getValue(something.render(pattern_id));
                                 } else {
                                     if (something.length && typeof something !== 'string' && isNode(something) === false) {
                                         Array.prototype.forEach.call(
@@ -729,8 +737,12 @@
                                                 wrapper.appendChild(something.cloneNode(true));
                                                 return wrapper.innerHTML;
                                             }(value));
-                                        }
-                                        if (typeof value.toString === 'function') {
+                                        } else if (typeof value === 'object' && value.template !== void 0 && value.instance !== void 0) {
+                                            value = {
+                                                html    : getValue(value.template),
+                                                instance: value.instance
+                                            };
+                                        } else if (typeof value.toString === 'function') {
                                             value = value.toString();
                                         } else {
                                             value = (typeof value === 'string' ? value : '');
@@ -750,7 +762,7 @@
                         };
                         if (hooks instanceof Array) {
                             hooks.forEach(function (_hooks, index) {
-                                template.set.hooks(hooks[index], parameters);
+                                template.set.hooks(hooks[index], pattern_id);
                             });
                         } else {
                             if (typeof hooks === 'object') {
@@ -978,14 +990,16 @@
                         }
                     },
                     getPatternInstance  : function (parameters, pattern, hooks) {
-                        return flex.oop.classes.create({
+                        var instance = flex.oop.classes.create({
                             constr      : function () {
-                                this.url    = parameters.url;
-                                this.id     = parameters.pattern_id;
+                                this.url        = parameters.url;
+                                this.id         = parameters.pattern_id;
+                                this.childs     = {};
                             },
                             privates    : {
-                                pattern : pattern,
-                                hooks   : hooks,
+                                pattern     : pattern,
+                                hooks       : hooks,
+                                //__instance -> automaticaly attached
                             },
                             prototype   : function (privates) {
                                 var self        = this,         
@@ -996,18 +1010,26 @@
                                     methods     = null,
                                     wrappers    = null,
                                     controllers = null;
-                                hooks   = {
+                                hooks       = {
                                     setHooks: function (hooks) {
                                         _object(privates.hooks).forEach(function (key, hook) {
+                                            var value = null;
                                             if (hooks[key] !== void 0) {
-                                                hook(hooks[key]);
+                                                value = hooks[key];
+                                                if (value !== null && typeof value === 'object') {
+                                                    if (value.html !== void 0) {
+                                                        self.childs[key]    = value.instance;
+                                                        value               = value.html;
+                                                    }
+                                                }
+                                                hook(value);
                                             } else {
                                                 hook('');
                                             }
                                         });
                                     },
                                 };
-                                map = {
+                                map         = {
                                     map     : {},
                                     create  : function (clone) {
                                         function processing(node, storage) {
@@ -1043,7 +1065,7 @@
                                         map.map = {};
                                     }
                                 };
-                                model = {
+                                model       = {
                                     model   : {},
                                     binds   : null,
                                     create  : function (clone) {
@@ -1219,7 +1241,7 @@
                                         model.binds     = null;
                                     }
                                 };
-                                wrappers = {
+                                wrappers    = {
                                     remove: function (clone) {
                                         var wrappers = _nodes(settings.tags.HOOK_WRAPPER, false, clone).target;
                                         if (wrappers.length > 0) {
@@ -1250,7 +1272,7 @@
                                         }
                                     }
                                 };
-                                methods = {
+                                methods     = {
                                     build   : function (_hooks, is_parent) {
                                         var result          = [],
                                             clone           = null,
@@ -1274,14 +1296,59 @@
                                         });
                                         return result;
                                     },
+                                    clone   : function(hooks, is_parent){
+                                        function getHTML(something) {
+                                            var something   = something instanceof Array ? something : [something],
+                                                html        = '';
+                                            something.forEach(function (something) {
+                                                var wrapper = null;
+                                                if (something.cloneNode) {
+                                                    wrapper = document.createElement('div');
+                                                    wrapper.appendChild(something.cloneNode(true));
+                                                    html    += wrapper.innerHTML;   
+                                                }
+                                            });
+                                            return html;
+                                        };
+                                        var hooks       = hooks instanceof Array ? hooks : [hooks],
+                                            _hooks      = {},
+                                            is_parent   = typeof is_parent === 'boolean' ? is_parent : true;
+                                        hooks.forEach(function (hooks) {
+                                            if (typeof hooks === 'object') {
+                                                _object(hooks).forEach(function (hook_name, hook_value) {
+                                                    var hook_value = hook_value instanceof Array ? hook_value : [hook_value];
+                                                    _hooks[hook_name] = '';
+                                                    hook_value.forEach(function (hook_value) {
+                                                        if (hook_value.nodeName !== void 0 && hook_value.parentNode !== void 0 && hook_value.nodeType !== void 0) {
+                                                            _hooks[hook_name] += getHTML(hook_value);
+                                                        } else if (typeof hook_value === 'function') {
+                                                            _hooks[hook_name] += hook_value();
+                                                        } else if (typeof hook_value === 'object') {
+                                                            if (self.childs[hook_name] !== void 0) {
+                                                                _hooks[hook_name] += getHTML(self.childs[hook_name].clone(hook_value, false));
+                                                            }
+                                                        } else if (typeof hook_value === 'string') {
+                                                            _hooks[hook_name] += hook_value;
+                                                        } else if (typeof value.toString === 'function') {
+                                                            _hooks[hook_name] += hook_value.toString();
+                                                        } else {
+                                                            throw new Error('Unexpected hook type');
+                                                        }
+                                                    });
+                                                });
+                                            }
+                                        });
+                                        return methods.build(_hooks, is_parent);
+                                    },
                                     handle  : function (handle) {
                                         if (typeof handle === 'function') {
-                                            handle(self.url, model.binds, model.model);
+                                            handle.call(privates.__instance, self.url, model.binds, model.model);
                                         }
-                                    }
+                                    },
                                 };
                                 return {
                                     build       : methods.build,
+                                    clone       : methods.clone,
                                     handle      : methods.handle,
                                     controllers : {
                                         set     : controllers.add,
@@ -1290,6 +1357,7 @@
                                 };
                             }
                         });
+                        return instance;
                     }
                 },
             };
