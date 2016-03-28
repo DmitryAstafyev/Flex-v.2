@@ -28,6 +28,7 @@
             events          = {},
             oop             = {},
             arrays          = {},
+            patterns        = {},
             privates        = {},
             hashes          = {},
             cache           = {},
@@ -85,6 +86,9 @@
                     CHECK_PATHS_IN_CSS      : { type: 'boolean',    value: false        },
                     ATTACH_PATH_SIGNATURE   : { type: 'string',     value: 'ATTACH::'   },
                     KERNEL_PATH_SIGNATURE   : { type: 'string',     value: 'KERNEL::'   },
+                },
+                patterns    :{
+                    TEST_FUNCTION : 'flexPatternTest'
                 },
                 cache       : {
                     reset   : {
@@ -168,12 +172,14 @@
         coreEvents      = {
             onFlexLoad: function () {
                 if (modules.isReady() && external.isReady() && modules.attach.unexpected.isReady()) {
-                    system.handle(config.defaults.events.onFlexLoad, null, 'config.defaults.events.onFlexLoad', this);
-                    if (config.defaults.events.onPageLoad !== null) {
-                        if (document.readyState !== 'complete') {
-                            events.DOM.add(window, 'load', config.defaults.events.onPageLoad);
-                        } else {
-                            system.handle(config.defaults.events.onPageLoad, null, 'config.defaults.events.onPageLoad', this);
+                    if (!patterns.execution()) {
+                        system.handle(config.defaults.events.onFlexLoad, null, 'config.defaults.events.onFlexLoad', this);
+                        if (config.defaults.events.onPageLoad !== null) {
+                            if (document.readyState !== 'complete') {
+                                events.DOM.add(window, 'load', config.defaults.events.onPageLoad);
+                            } else {
+                                system.handle(config.defaults.events.onPageLoad, null, 'config.defaults.events.onPageLoad', this);
+                            }
                         }
                     }
                     //Launch self-lanuched appended modules
@@ -305,6 +311,7 @@
                     result = (options.registry[item].source === true ? result : false);
                 }
                 if (result !== false) {
+                    patterns.           modification();
                     cache.              init();
                     modules.registry.   ready();
                     modules.            preload();
@@ -4902,6 +4909,42 @@
                     wrappers.constructors[constructor].prototype = wrappers.prototypes[constructor];
                 }
                 return true;
+            }
+        };
+        patterns        = {
+            execution       : function () {
+                if (typeof window[config.defaults.patterns.TEST_FUNCTION] === 'function') {
+                    system.handle(window[config.defaults.patterns.TEST_FUNCTION], null, config.defaults.patterns.TEST_FUNCTION, this);
+                    return true;
+                }
+                return false;
+            },
+            modification    : function () {
+                function processing(patternsFunction, operation) {
+                    if (patternsFunction[operation] instanceof Array && config.defaults.resources.MODULES instanceof Array) {
+                        patternsFunction[operation].forEach(function (module) {
+                            if (typeof module === 'string') {
+                                switch (operation) {
+                                    case 'include':
+                                        if (config.defaults.resources.MODULES.indexOf(module) === -1) {
+                                            config.defaults.resources.MODULES.push(module);
+                                        }
+                                        break;
+                                    case 'exclude':
+                                        if (config.defaults.resources.MODULES.indexOf(module) !== -1) {
+                                            config.defaults.resources.MODULES.splice(config.defaults.resources.MODULES.indexOf(module), 1);
+                                        }
+                                        break;
+                                }
+                            }
+                        });
+                    }
+                };
+                var patternsFunction = window[config.defaults.patterns.TEST_FUNCTION];
+                if (typeof patternsFunction === 'function') {
+                    processing(patternsFunction, 'include');
+                    processing(patternsFunction, 'exclude');
+                }
             }
         };
         //Private part

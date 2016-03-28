@@ -460,8 +460,6 @@
                                     }
                                     //Execute callback
                                     data.instance.handle(parameters.callbacks.success);
-                                    //Apply controllers
-                                    data.instance.controllers.apply();
                                     //Reset time in logs
                                     logs.performance(parameters.pattern_id, parameters.url);
                                 } else {
@@ -1290,6 +1288,9 @@
                                                 model.      clear (clone);
                                                 model.      bind();
                                             }
+                                            //Apply controllers
+                                            controllers.apply();
+                                            //Prepare result
                                             Array.prototype.forEach.call(clone.childNodes, function (node) {
                                                 result.push(node);
                                             });
@@ -1655,6 +1656,7 @@
             reference       : function () {
                 flex.libraries.events();
                 flex.libraries.binds();
+                flex.libraries.html();
             },
             onAfterAttach: function () {
             }
