@@ -118,12 +118,24 @@
                     );
                 },
                 start: function (event, container, hook, direction, position_parent, id) {
-                    var possition   = null,
+                    function getPosition(node) {
+                        if (node.currentStyle) {
+                            if (node.currentStyle.position) {
+                                return node.currentStyle.position;
+                            }
+                        }
+                        if (window.getComputedStyle) {
+                            return window.getComputedStyle(node).position;
+                        }
+                        return null;
+                    }
+                    var possition = null,
                         scroll      = null,
                         sizes       = null,
                         size        = null,
                         pos         = null,
-                        scrl        = null;
+                        scrl        = null,
+                        isFixed     = null;
                     if (flex.overhead.objecty.get(container, settings.STATE_STORAGE, false, false) === false) {
                         possition   = html.position();
                         scroll      = html.scroll();
@@ -131,6 +143,7 @@
                         size        = sizes.node(container);
                         pos         = possition.byPage(position_parent !== null ? position_parent : container);
                         scrl        = scroll.get(container.parentNode);
+                        isFixed     = getPosition(container) !== 'fixed' ? false : true;
                         flex.overhead.globaly.set(
                             settings.GLOBAL_GROUP,
                             settings.GLOBAL_CURRENT,
@@ -148,8 +161,8 @@
                                 id              : id,
                                 oldX            : event.flex.pageX,
                                 oldY            : event.flex.pageY,
-                                posX            : pos.left + scrl.left(),
-                                posY            : pos.top + scrl.top(),
+                                posX            : pos.left + (isFixed === false ? scrl.left() : 0),
+                                posY            : pos.top + (isFixed === false ? scrl.top() : 0),
                                 width           : size.width,
                                 height          : size.height
                             }
