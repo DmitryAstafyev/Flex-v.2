@@ -926,6 +926,7 @@
                             var reg_model = reg_model instanceof RegExp ? reg_model : new RegExp(settings.regs.MODEL_OPEN + model + settings.regs.MODEL_CLOSE, 'gi');
                             if (node.attributes) {
                                 Array.prototype.forEach.call(node.attributes, function (attr) {
+                                    var defaultIEFix = null;
                                     if (typeof attr.nodeValue === 'string' && attr.nodeValue !== '') {
                                         if (clearTest(reg_model, attr.nodeValue)) {
                                             setAttrData(node, {
@@ -933,6 +934,14 @@
                                                 model: model
                                             });
                                             node.removeAttribute(attr.nodeName);
+                                            if (node[attr.nodeName] !== void 0) {
+                                                node[attr.nodeName] = null;
+                                                //IE 11 fix
+                                                defaultIEFix = 'default' + attr.nodeName[0].toUpperCase() + attr.nodeName.substr(1, attr.nodeName.length - 1);
+                                                if (node[defaultIEFix] !== void 0) {
+                                                    node[defaultIEFix] = '';
+                                                }
+                                            }
                                         }
                                     }
                                 });
