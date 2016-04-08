@@ -87,7 +87,7 @@
                     show        : true
                 }
             };
-            transport   = {
+            transport       = {
                 preload     : {
                     /// <summary>
                     /// Tracker is submodule for preload several templates by one time
@@ -305,7 +305,7 @@
                     return null;
                 }
             };
-            bindsEvents      = {
+            bindsEvents     = {
                 data    : {
                     value: [
                         //Group #1
@@ -352,7 +352,7 @@
                     return false;
                 }
             };
-            template    = {
+            template        = {
                 init        : function (parameters){
                     /// <summary>
                     /// Load template; save it in virtual storage and local storage (if it's allowed)
