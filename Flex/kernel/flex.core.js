@@ -5044,7 +5044,17 @@
                 }
             },
             system          : {
-                handle  : system.handle,
+                handle      : system.handle,
+                convertor   : {
+                    UTF8    : {
+                        encode  : system.convertor.UTF8.encode,
+                        decode  : system.convertor.UTF8.decode,
+                    },
+                    BASE64  : {
+                        encode  : system.convertor.BASE64.encode,
+                        decode  : system.convertor.BASE64.decode,
+                    },
+                },
                 url     : {
                     parse   : system.url.parse,
                     restore : system.url.restoreFullURL
@@ -5157,8 +5167,18 @@
                 getJSON : privates.localStorage.getJSON,
             },
             system          : {
-                handle  : privates.system.handle,
-                url     : {
+                handle      : privates.system.handle,
+                convertor   : {
+                    UTF8    : {
+                        encode  : privates.system.convertor.UTF8.encode,
+                        decode  : privates.system.convertor.UTF8.decode,
+                    },
+                    BASE64  : {
+                        encode  : privates.system.convertor.BASE64.encode,
+                        decode  : privates.system.convertor.BASE64.decode,
+                    },
+                },
+                url         : {
                     parse   : privates.system.url.parse,
                     restore : privates.system.url.restore
                 }

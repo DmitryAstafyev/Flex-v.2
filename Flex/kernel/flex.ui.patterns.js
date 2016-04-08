@@ -486,6 +486,19 @@
                             storage.local.add(parameters.url, _data);
                         }
                     };
+                    function externalResources(data, parameters) {
+                        function check(res) {
+                            if (parameters[res] instanceof Array) {
+                                data[res] = data[res] instanceof Array ? data[res] : [];
+                                parameters[res].forEach(function (src) {
+                                    data[res].push(src);
+                                });
+                                delete parameters[res];
+                            }
+                        };
+                        check('js');
+                        check('css');
+                    };
                     var data = {
                             original: typeof something === 'object' ? something.original    : something,
                             html    : typeof something === 'object' ? something.html        : template.get.html (something),
@@ -499,6 +512,8 @@
                             //Fix time in logs
                             logs.performance(parameters.pattern_id, parameters.url);
                         }
+                        //Check addition resources (CSS and JS)
+                        externalResources(data, parameters);
                         //Save data into virtual
                         save(data, parameters);
                         if (parameters.parent_pattern_id === void 0) {
@@ -904,10 +919,35 @@
                                     }(_hooks));
                                 });
                                 template.set.model(body, pattern, parameters);
-                                template.set.storage[parameters.url] = template.set.getPatternInstance(parameters, pattern, __hooks);
+                                if (parameters.preload !== void 0) {
+                                    template.set.storage[parameters.url] = (function (pattern, __hooks) {
+                                        var pattern = pattern,
+                                            __hooks = __hooks;
+                                        return {
+                                            controller      : null,
+                                            getInstance     : function (parameters) {
+                                                var instance = template.set.getPatternInstance(parameters, pattern, __hooks);
+                                                if (this.controller !== null) {
+                                                    instance.controllers.set(this.controller);
+                                                }
+                                                return instance;
+                                            },
+                                            setController   : function (controller) {
+                                                if (typeof controller === 'function') {
+                                                    this.controller = controller;
+                                                }
+                                            }
+                                        };
+                                    }(pattern, __hooks));
+                                } else {
+                                    template.set.storage[parameters.url] = template.set.getPatternInstance(parameters, pattern, __hooks);
+                                }
                             } else {
                                 return null;
                             }
+                        }
+                        if (parameters.preload === void 0 && typeof template.set.storage[parameters.url].getInstance === 'function') {
+                            template.set.storage[parameters.url] = template.set.storage[parameters.url].getInstance(parameters);
                         }
                         return template.set.storage[parameters.url];
                     },
@@ -1002,6 +1042,7 @@
                                 this.url        = parameters.url;
                                 this.id         = parameters.pattern_id;
                                 this.childs     = {};
+                                this.resources  = parameters.resources !== void 0 ? parameters.resources : null;
                             },
                             privates    : {
                                 pattern     : pattern,
@@ -1275,7 +1316,7 @@
                                     },
                                     apply       : function () {
                                         if (controllers.controller !== null) {
-                                            controllers.controller(model.model, map.map, null);
+                                            controllers.controller(model.model, map.map, self.resources);
                                         }
                                     }
                                 };
@@ -1620,7 +1661,11 @@
                             pattern = template.get.pattern(pattern);
                             if (pattern !== null) {
                                 //Save controller
-                                pattern.controllers.set(controller);
+                                if (typeof pattern.setController === 'function') {
+                                    pattern.setController(controller);
+                                } else {
+                                    pattern.controllers.set(controller);
+                                }
                             }
                         }
                     }

@@ -58,7 +58,7 @@
                 }
             };
             processing = {
-                attach: function (container, hooks, id) {
+                attach  : function (container, hooks, id) {
                     var DOMEvents = events.DOMEvents();
                     Array.prototype.forEach.call(
                         hooks,
@@ -67,7 +67,7 @@
                                 hook,
                                 'click',
                                 function (event) {
-                                    processing.onClick(event, container, hooks, id);
+                                    processing.onClick(event, container, id);
                                     return true;
                                 },
                                 id + '_' + index
@@ -75,7 +75,7 @@
                         }
                     );
                 },
-                onClick : function (event, container, hooks, id) {
+                onClick : function (event, container, id) {
                     var storage = flex.overhead.objecty.get(container, settings.STORAGE, false);
                     if (storage !== null) {
                         if (storage.maximazed === false) {
@@ -144,13 +144,59 @@
                             10
                         );
                     },
+                    byID : {
+                        findByID: function (id) {
+                            var selector    = new html.select.bySelector(),
+                                id          = id || null,
+                                containers  = null,
+                                result      = [];
+                            if (id !== null) {
+                                containers = selector.all('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']');
+                                if (containers !== null) {
+                                    if (containers.length > 0) {
+                                        Array.prototype.forEach.call(containers, function (container) {
+                                            var storage = flex.overhead.objecty.get(container, settings.STORAGE, false);
+                                            if (storage !== null) {
+                                                result.push({
+                                                    container   : container,
+                                                    storage     : storage
+                                                });
+                                            }
+                                        });
+                                        return result.length > 0 ? result : null;
+                                    }
+                                }
+                            }
+                            return null;
+                        },
+                        maximaze: function (id) {
+                            var data = processing.actions.byID.findByID(id);
+                            if (data !== null) {
+                                data.forEach(function (data) {
+                                    processing.actions.maximaze(data.container, data.storage, id);
+                                });
+                            }
+                        },
+                        restore : function (id) {
+                            var data = processing.actions.byID.findByID(id);
+                            if (data !== null) {
+                                data.forEach(function (data) {
+                                    processing.actions.restore(data.container, data.storage, id);
+                                });
+                            }
+                        },
+                    }
                 }
             };
             privates    = {
-                init : init
+                init    : init,
+                maximaze: processing.actions.byID.maximaze,
+                restore : processing.actions.byID.restore,
             };
             return {
-                init : privates.init
+                init        : privates.init,
+                maximaze    : privates.maximaze,
+                restore     : privates.restore,
             };
         };
         flex.modules.attach({
