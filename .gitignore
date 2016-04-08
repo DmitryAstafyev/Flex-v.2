@@ -11,6 +11,9 @@
 *.userprefs
 # Not kernel
 patterns/
+patterns
+Flex/patterns/
+Flex/patterns
 
 # Build results
 [Dd]ebug/
