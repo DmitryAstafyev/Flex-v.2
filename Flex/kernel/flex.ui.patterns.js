@@ -1412,7 +1412,7 @@
                     }
                 },
             };
-            resources   = {
+            resources       = {
                 css : {
                     load    : function (hrefs, onFinish) {
                         var journal     = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CSS_ATTACHED_JOURNAL, {}),
