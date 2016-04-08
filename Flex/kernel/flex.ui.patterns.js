@@ -1573,7 +1573,7 @@
                     }
                 }
             };
-            storage     = {
+            storage         = {
                 virtual : {
                     add     : function (key, value) {
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.VIRTUAL_STORAGE_ID, {});
