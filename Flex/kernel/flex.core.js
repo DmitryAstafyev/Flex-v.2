@@ -787,6 +787,7 @@
                     ///     </summary>
                     ///     <param name="parameters"    type="object">Parameters of class:  &#13;&#10;
                     ///     {   [function]              constr,                             &#13;&#10;
+                    ///         [function]              parent                              &#13;&#10;
                     ///         [object]                privates,                           &#13;&#10;
                     ///         [function || object]    prototype                           &#13;&#10;
                     ///     }</param>
@@ -797,6 +798,7 @@
                             constr      : function () {
                                 this.one = 'one';
                             },
+                            parent      : [function],
                             privates    : {
                                 two         : 'two',
                                 three       : 'three',
@@ -816,19 +818,33 @@
                             }
                         });
                     =============EXAMPLE=============
+                    Parameter [parent] also allows to identify instance within instance of.
                     */
-                    var constr      = typeof parameters.constr  === 'function'  ? parameters.constr     : function () { },
-                        privates    = parameters.privates       !== void 0      ? parameters.privates   : { },
-                        prototype   = parameters.prototype      !== void 0      ? parameters.prototype  : {},
-                        instance    = null;
+                    var constr          = typeof parameters.constr          === 'function'  ? parameters.constr         : null,
+                        parent          = typeof parameters.parent          === 'function'  ? parameters.parent         : null,
+                        privates        = parameters.privates               !== void 0      ? parameters.privates       : {},
+                        prototype       = parameters.prototype              !== void 0      ? parameters.prototype      : {},
+                        instance        = null,
+                        temp            = null,
+                        proto           = null;
                     if (!(this instanceof oop.classes.create)) {
-                        constr.prototype    = typeof prototype === 'function' ? prototype.call(new constr(), privates) : prototype;
+                        if (parent !== null) {
+                            temp                = function () { };
+                            temp.prototype      = parent.prototype;
+                            proto               = typeof prototype === 'function' ? prototype.call(new constr(), privates) : prototype;
+                            constr.prototype    = new temp();
+                            for (var prop in proto) {
+                                constr.prototype[prop] = proto[prop];
+                            }
+                        } else {
+                            constr.prototype    = typeof prototype === 'function' ? prototype.call(new constr(), privates) : prototype;
+                        }
                         privates.__instance = new constr();
                         return privates.__instance;
                     } else {
                         throw Error('Method [flex.oop.classes.create] cannot be used with derective NEW');
                     }
-                }
+                },
             },
             objects     : {
                 forEach         : function (object, callback) {
@@ -1221,6 +1237,9 @@
                     });
                     wrappers.prototypes.add.object('createInstanceClass', function () {
                         return oop.classes.create(this.target);
+                    });
+                    wrappers.prototypes.add.object('isInstanceOfClass', function () {
+                        return oop.classes.instanceOf(this.target);
                     });
                 }
             }
