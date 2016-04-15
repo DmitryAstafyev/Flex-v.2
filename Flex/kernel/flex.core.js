@@ -203,14 +203,17 @@
                     JS: '.js',
                 }
             },
-            regs: {
+            regs        : {
                 urls    : {
-                    PARAMS      : /\?.*/gi,
-                    EXTENSION   : /(\.[\w\n]*)$/gi,
-                    JS_URL      : /[\w]*:\/\/[\w\n:\/\.]*\.js/gi
+                    PARAMS          : /\?.*/gi,
+                    EXTENSION       : /(\.[\w\n]*)$/gi,
+                    JS_URL          : /[\w]*:\/\/[\w\n:\/\.]*\.js/gi,
+                    NOT_URL_SYMBOLS : /[\s\t\n\r]/gi,
+                    JS_EXP_IN_URL   : /\.js$/gi,
+                    CSS_EXP_IN_URL  : /\.css$/gi
                 }
             },
-            registry: {
+            registry    : {
                 EVENTS      : {
                     source      : 'flex.registry.events.js',
                     defaults    : {
@@ -247,24 +250,24 @@
                     defaults    : null
                 },
             },
-            register: {
+            register    : {
                 EXTERNAL_HISTROY    : 'flex.external.history',
                 MODULES_HISTROY     : 'flex.modules.history',
                 RESOURCES_HISTORY   : 'flex.modules.resources.history',
                 ASYNCHRONOUS_HISTORY: 'asynchronous.history',
             },
-            hashes  : {
+            hashes      : {
                 LOCAL_STORAGE_NAME : 'flex.hash.storage'
             },
-            cache   : {
+            cache       : {
                 STORAGE             : 'flex.cache.storage.reset_data',
                 URL_PARAM_VERSION   : 'flexhash'
             },
-            files   : {
+            files       : {
                 CORE    : 'flex.core.js', //This is default value, will be apply in case of fail auto-detection
                 CORE_URL: ''
             },
-            other   : {
+            other       : {
                 STORAGE_PREFIX  : '[FLEX_SYSTEM_RESURCES]'
             }
         };
@@ -2498,11 +2501,11 @@
                                 modules.attach.safely(repository);
                                 return true;
                             } else {
-                                if (settings.source.toLocaleString().indexOf('.js') === settings.source.length - '.js'.length) {
+                                if (system.url.is.js(settings.source)) {
                                     system.resources.js.connect(settings.source, null, null);
                                     return true;
                                 }
-                                if (settings.source.toLocaleString().indexOf('.css') === settings.source.length - '.css'.length) {
+                                if (system.url.is.css(settings.source)) {
                                     system.resources.css.connect(settings.source, null, null);
                                     return true;
                                 }
@@ -2617,30 +2620,37 @@
                 /// }</param>
                 /// <returns type="boolean">true if success and false if not</returns>
                 var Embody          = null,
-                    resourceType    = system.url.getTypeOfResource(parameters.url);
-                if (resourceType === options.resources.types.JS) {
-                    Embody = JS;
-                } else if (resourceType === options.resources.types.CSS) {
-                    Embody = CSS;
-                }
-                if (Embody !== null) {
-                    Embody(
-                        parameters.body,
-                        parameters.url,
-                        function () {
+                    resourceType    = system.url.getTypeOfResource(parameters.url),
+                    success         = (function (parameters) {
+                        return function () {
                             if (parameters.callback !== null) {
                                 system.handle(parameters.callback, parameters.url, '[flex]external.embody');
                             } else {
                                 external.queue.done(parameters.url);
                             }
-                        },
-                        function () {
-                            logs.log('Resource [' + parameters.url + '] was not load. But FLEX continues loading.', logs.types.CRITICAL);
-                            if (parameters.callback === null) {
-                                external.queue.done(parameters.url);
+                        };
+                    }(parameters));
+                if (parameters.body !== null) {
+                    if (resourceType === options.resources.types.JS) {
+                        Embody = JS;
+                    } else if (resourceType === options.resources.types.CSS) {
+                        Embody = CSS;
+                    }
+                    if (Embody !== null) {
+                        Embody(
+                            parameters.body,
+                            parameters.url,
+                            success,
+                            function () {
+                                logs.log('Resource [' + parameters.url + '] was not load. But FLEX continues loading.', logs.types.CRITICAL);
+                                if (parameters.callback === null) {
+                                    external.queue.done(parameters.url);
+                                }
                             }
-                        }
-                    );
+                        );
+                    }
+                } else {
+                    success();
                 }
             },
             inbuilt     : {
@@ -2677,7 +2687,7 @@
                     /// }</param>
                     /// <returns type="boolean">true if success and false if not</returns>
                     var hash = external.repository.getHash(parameters.url);
-                    if (hash !== parameters.hash && config.defaults.resources.USE_STORAGED !== false) {
+                    if (hash !== parameters.hash && config.defaults.resources.USE_STORAGED !== false && parameters.body !== null) {
                         return system.localStorage.set(
                             parameters.url,
                             JSON.stringify(
@@ -2776,7 +2786,7 @@
                                 external.loader.success(url, response, hash, embody, callback);
                             },
                             fail    : function (response, request) {
-                                external.loader.fail(request, url, response, hash);
+                                external.loader.fail(request, url, hash, embody, callback);
                             }
                         },
                         null
@@ -2788,20 +2798,39 @@
                     external.repository.add({
                         url : url,
                         hash: hash,
-                        body: response.original
+                        body: response !== null ? response.original : null
                     });
                     if (embody === true) {
                         external.embody({
                             url     : url,
                             hash    : hash,
-                            body    : response.original,
+                            body    : response !== null ? response.original : null,
                             callback: callback
                         });
                     }
                     logs.log('[EXTERNAL]:: resource: [' + url + '] is reloaded.', logs.types.KERNEL_LOGS);
                 },
-                fail    : function (request, url, response, hash) {
-                    logs.log('[EXTERNAL]:: cannot load resource: [' + url + '].', logs.types.CRITICAL);
+                fail    : function (request, url, hash, embody, callback) {
+                    function load(type, url, hash, embody, callback) {
+                        logs.log('[EXTERNAL]:: cannot load resource: [' + url + '] cannot be loaded by XMLHttpRequest.', logs.types.WARNING);
+                        system.resources[type].connect(url,
+                            function () {
+                                external.loader.success(url, null, hash, embody, callback);
+                                logs.log('[EXTERNAL]:: resource: [' + url + '] was attached. Cache is not avaliable for this resource.', logs.types.WARNING);
+                            },
+                            function () {
+                                logs.log('[EXTERNAL]:: cannot load resource: [' + url + '] any how.', logs.types.CRITICAL);
+                            }
+                        );
+                    };
+                    //Try attach JS
+                    if (system.url.is.js(url)) {
+                        load('js', url, hash, embody, callback);
+                    } else if (system.url.is.css(url)) {
+                        load('css', url, hash, embody, callback);
+                    } else {
+                        logs.log('[EXTERNAL]:: cannot load resource: [' + url + '].', logs.types.CRITICAL);
+                    }
                 }
             },
         };
@@ -2895,16 +2924,21 @@
                 /// <returns type="boolean">true if success and false if not</returns>
                 var resourceType    = system.url.getTypeOfResource(parameters.url),
                     Embody          = null;
-                if (resourceType === options.resources.types.JS) {
-                    Embody = JS;
-                } else if (resourceType === options.resources.types.CSS) {
-                    Embody = CSS;
-                }
-                if (Embody !== null) {
-                    if (Embody(parameters.id, parameters.body, parameters.url, parameters.storage) !== false) {
-                        overhead.register.done(parameters.id, parameters.url);
-                        asynchronous.wait.check();
+                if (parameters.body !== null) {
+                    if (resourceType === options.resources.types.JS) {
+                        Embody = JS;
+                    } else if (resourceType === options.resources.types.CSS) {
+                        Embody = CSS;
                     }
+                    if (Embody !== null) {
+                        if (Embody(parameters.id, parameters.body, parameters.url, parameters.storage) !== false) {
+                            overhead.register.done(parameters.id, parameters.url);
+                            asynchronous.wait.check();
+                        }
+                    }
+                } else {
+                    overhead.register.done(parameters.id, parameters.url);
+                    asynchronous.wait.check();
                 }
             },
             repository  : {
@@ -2918,7 +2952,7 @@
                     ///     [string]    hash,                                       &#13;&#10;
                     /// }</param>
                     /// <returns type="boolean">true if success and false if not</returns>
-                    if (config.defaults.resources.USE_STORAGED !== false) {
+                    if (config.defaults.resources.USE_STORAGED !== false && parameters.body !== null) {
                         return system.localStorage.set(
                             parameters.url,
                             JSON.stringify(
@@ -3010,7 +3044,7 @@
                                     asynchronous.loader.success(url, response, id, embody, storage, hash);
                                 },
                                 fail    : function (response, request) {
-                                    asynchronous.loader.fail(request, url, response, id);
+                                    asynchronous.loader.fail(request, url, response, id, embody, storage, hash);
                                 }
                             },
                             null
@@ -3021,7 +3055,7 @@
                     if (storage !== false) {
                         asynchronous.repository.add({
                             url : url,
-                            body: response.original,
+                            body: response !== null ? response.original : null,
                             hash: hash
                         });
                     }
@@ -3029,12 +3063,32 @@
                         asynchronous.embody({
                             url     : url,
                             id      : id,
-                            body    : response.original,
+                            body    : response !== null ? response.original : null,
                             storage : storage
                         });
                     }
                 },
-                fail    : function (request, url, response, id) {
+                fail    : function (request, url, response, id, embody, storage, hash) {
+                    function load(type, url, response, id, embody, storage, hash) {
+                        logs.log('[ASYNCHRONOUS]:: cannot load resource: [' + url + '] cannot be loaded by XMLHttpRequest.', logs.types.WARNING);
+                        system.resources[type].connect(url,
+                            function () {
+                                asynchronous.loader.success(url, null, id, embody, storage, hash);
+                                logs.log('[ASYNCHRONOUS]:: resource: [' + url + '] was attached. Cache is not avaliable for this resource.', logs.types.WARNING);
+                            },
+                            function () {
+                                logs.log('[ASYNCHRONOUS]:: cannot load resource: [' + url + '] any how.', logs.types.CRITICAL);
+                            }
+                        );
+                    };
+                    //Try attach JS
+                    if (system.url.is.js(url)) {
+                        load('js', url, response, id, embody, storage, hash);
+                    } else if (system.url.is.css(url)) {
+                        load('css', url, response, id, embody, storage, hash);
+                    } else {
+                        logs.log('[ASYNCHRONOUS]:: cannot load resource: [' + url + '].', logs.types.CRITICAL);
+                    }
                     logs.log('[ASYNCHRONOUS]:: cannot load resource: [' + url + '].', logs.types.CRITICAL);
                 }
             },
@@ -4662,6 +4716,33 @@
                         }
                     }
                     return null;
+                },
+                is                  : {
+                    clear   : function(url){
+                        if (typeof url === 'string') {
+                            url = url.split('?');
+                            url = url[0];
+                            url = url.replace(options.regs.urls.NOT_URL_SYMBOLS, '');
+                            return url;
+                        }
+                        return null;
+                    },
+                    js      : function (url) {
+                        url = system.url.is.clear(url);
+                        if (url !== null) {
+                            options.regs.urls.JS_EXP_IN_URL.lastIndex = 0;
+                            return options.regs.urls.JS_EXP_IN_URL.test(url);
+                        }
+                        return false;
+                    },
+                    css     : function (url) {
+                        url = system.url.is.clear(url);
+                        if (url !== null) {
+                            options.regs.urls.CSS_EXP_IN_URL.lastIndex = 0;
+                            return options.regs.urls.CSS_EXP_IN_URL.test(url);
+                        }
+                        return false;
+                    },
                 }
             },
         };
