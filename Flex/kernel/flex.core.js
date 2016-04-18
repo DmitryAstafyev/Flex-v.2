@@ -44,10 +44,11 @@
         config          = {
             defaults    : {
                 resources   : {
-                    USE_STORAGED    : { type: 'boolean',    value: true },
-                    MODULES         : { type: 'array',      value: []   },
-                    EXTERNAL        : { type: 'array',      value: []   },
-                    ASYNCHRONOUS    : { type: 'array',      value: []   }
+                    USE_STORAGED        : { type: 'boolean',    value: true },
+                    WAIT_ASYNCHRONOUS   : { type: 'boolean',    value: true },
+                    MODULES             : { type: 'array',      value: []   },
+                    EXTERNAL            : { type: 'array',      value: []   },
+                    ASYNCHRONOUS        : { type: 'array',      value: []   }
                 },
                 paths       : {
                     CORE    : {
@@ -171,21 +172,26 @@
         };
         coreEvents      = {
             onFlexLoad: function () {
-                if (modules.isReady() && external.isReady() && modules.attach.unexpected.isReady()) {
-                    if (!patterns.execution()) {
-                        system.handle(config.defaults.events.onFlexLoad, null, 'config.defaults.events.onFlexLoad', this);
-                        if (config.defaults.events.onPageLoad !== null) {
-                            if (document.readyState !== 'complete') {
-                                events.DOM.add(window, 'load', config.defaults.events.onPageLoad);
-                            } else {
-                                system.handle(config.defaults.events.onPageLoad, null, 'config.defaults.events.onPageLoad', this);
+                if (modules.isReady() && external.isReady() && asynchronous.isReady() && modules.attach.unexpected.isReady()) {
+                    if (config.defaults.events.onFlexLoad.__inited === void 0) {
+                        if (!patterns.execution()) {
+                            config.defaults.events.onFlexLoad.__inited = true;
+                            system.handle(config.defaults.events.onFlexLoad, null, 'config.defaults.events.onFlexLoad', this);
+                            if (config.defaults.events.onPageLoad !== null) {
+                                if (document.readyState !== 'complete') {
+                                    events.DOM.add(window, 'load', config.defaults.events.onPageLoad);
+                                } else {
+                                    system.handle(config.defaults.events.onPageLoad, null, 'config.defaults.events.onPageLoad', this);
+                                }
                             }
                         }
+                        //Launch self-lanuched appended modules
+                        modules.attach.unexpected.launched.accept();
+                        //Run hashes updates
+                        hashes.update.queue.unlock();
+                    } else {
+                        logs.log('Double start of [onFlexLoad]', logs.types.CRITICAL);
                     }
-                    //Launch self-lanuched appended modules
-                    modules.attach.unexpected.launched.accept();
-                    //Run hashes updates
-                    hashes.update.queue.unlock();
                 }
             }
         };
@@ -2529,7 +2535,7 @@
         };
         external        = {
             isReady     : function(){
-                return overhead.register.isReady(options.register.EXTERNAL_HISTROY);
+                return external.preload.__started === void 0 ? false : overhead.register.isReady(options.register.EXTERNAL_HISTROY);
             },
             queue       : {
                 create  : function (resources) {
@@ -2554,6 +2560,7 @@
             },
             preload     : function () {
                 var resources = config.defaults.resources.EXTERNAL;
+                external.preload.__started = true;
                 if (resources instanceof Array) {
                     if (resources.length > 0) {
                         external.queue.create(resources);
@@ -2581,7 +2588,7 @@
             embody      : function (parameters) {
                 function JS(content, url, onLoad, onError) {
                     var wrapper = null;
-                    if (config.defaults.resources.USE_STORAGED === false) {
+                    if (config.defaults.resources.USE_STORAGED === false || parameters.body === null) {
                         system.resources.js.connect(url, onLoad, onError);
                     } else {
                         wrapper = new Function(content);
@@ -2599,7 +2606,7 @@
                     }
                 };
                 function CSS(content, url, onLoad, onError) {
-                    if (config.defaults.resources.USE_STORAGED === false) {
+                    if (config.defaults.resources.USE_STORAGED === false || parameters.body === null) {
                         system.resources.css.connect(url, onLoad, onError);
                     } else {
                         external.inbuilt.set.css(url);
@@ -2620,37 +2627,30 @@
                 /// }</param>
                 /// <returns type="boolean">true if success and false if not</returns>
                 var Embody          = null,
-                    resourceType    = system.url.getTypeOfResource(parameters.url),
-                    success         = (function (parameters) {
-                        return function () {
+                    resourceType    = system.url.getTypeOfResource(parameters.url);
+                if (resourceType === options.resources.types.JS) {
+                    Embody = JS;
+                } else if (resourceType === options.resources.types.CSS) {
+                    Embody = CSS;
+                }
+                if (Embody !== null) {
+                    Embody(
+                        parameters.body,
+                        parameters.url,
+                        function () {
                             if (parameters.callback !== null) {
                                 system.handle(parameters.callback, parameters.url, '[flex]external.embody');
                             } else {
                                 external.queue.done(parameters.url);
                             }
-                        };
-                    }(parameters));
-                if (parameters.body !== null) {
-                    if (resourceType === options.resources.types.JS) {
-                        Embody = JS;
-                    } else if (resourceType === options.resources.types.CSS) {
-                        Embody = CSS;
-                    }
-                    if (Embody !== null) {
-                        Embody(
-                            parameters.body,
-                            parameters.url,
-                            success,
-                            function () {
-                                logs.log('Resource [' + parameters.url + '] was not load. But FLEX continues loading.', logs.types.CRITICAL);
-                                if (parameters.callback === null) {
-                                    external.queue.done(parameters.url);
-                                }
+                        },
+                        function () {
+                            logs.log('Resource [' + parameters.url + '] was not load. But FLEX continues loading.', logs.types.CRITICAL);
+                            if (parameters.callback === null) {
+                                external.queue.done(parameters.url);
                             }
-                        );
-                    }
-                } else {
-                    success();
+                        }
+                    );
                 }
             },
             inbuilt     : {
@@ -2811,37 +2811,37 @@
                     logs.log('[EXTERNAL]:: resource: [' + url + '] is reloaded.', logs.types.KERNEL_LOGS);
                 },
                 fail    : function (request, url, hash, embody, callback) {
-                    function load(type, url, hash, embody, callback) {
-                        logs.log('[EXTERNAL]:: cannot load resource: [' + url + '] cannot be loaded by XMLHttpRequest.', logs.types.WARNING);
-                        system.resources[type].connect(url,
-                            function () {
-                                external.loader.success(url, null, hash, embody, callback);
-                                logs.log('[EXTERNAL]:: resource: [' + url + '] was attached. Cache is not avaliable for this resource.', logs.types.WARNING);
-                            },
-                            function () {
-                                logs.log('[EXTERNAL]:: cannot load resource: [' + url + '] any how.', logs.types.CRITICAL);
-                            }
-                        );
-                    };
                     //Try attach JS
-                    if (system.url.is.js(url)) {
-                        load('js', url, hash, embody, callback);
-                    } else if (system.url.is.css(url)) {
-                        load('css', url, hash, embody, callback);
-                    } else {
-                        logs.log('[EXTERNAL]:: cannot load resource: [' + url + '].', logs.types.CRITICAL);
-                    }
+                    logs.log('[EXTERNAL]:: cannot load resource: [' + url + '] cannot be loaded by XMLHttpRequest.', logs.types.WARNING);
+                    external.embody({
+                        url     : url,
+                        hash    : hash,
+                        body    : null,
+                        callback: callback
+                    });
                 }
             },
         };
         asynchronous    = {
-            preload     : function () {
+            isReady: function () {
+                return asynchronous.preload.__started === void 0 ? false : (config.defaults.resources.WAIT_ASYNCHRONOUS ? overhead.register.isReady(options.register.ASYNCHRONOUS_HISTORY) : true);
+            },
+            preload: function () {
                 var groups = config.defaults.resources.ASYNCHRONOUS;
+                asynchronous.preload.__started = true;
                 if (groups instanceof Array) {
                     if (groups.length > 0) {
+                        //Global journal
+                        overhead.register.open(
+                            options.register.ASYNCHRONOUS_HISTORY,
+                            Array.prototype.map.call(groups, function (group, index) { return index; }),
+                            function () {
+                                coreEvents.onFlexLoad();
+                            }
+                        );
                         Array.prototype.forEach.call(
                             groups,
-                            function (group) {
+                            function (group, index) {
                                 var id = IDs.id();
                                 if (oop.objects.validate(group, [   { name: 'resources',    type: 'array'                   },
                                                                     { name: 'storage',      type: 'boolean',    value: true },
@@ -2852,7 +2852,10 @@
                                     overhead.register.open(
                                         id,
                                         group.resources.map(function (resource) { return resource.url; }),
-                                        group.finish
+                                        function () {
+                                            system.handle(group.finish);
+                                            overhead.register.done(options.register.ASYNCHRONOUS_HISTORY, index);
+                                        }
                                     );
                                     //Make calls
                                     group.resources.forEach(function (resource) {
@@ -2875,7 +2878,7 @@
             embody      : function (parameters) {
                 function JS(id, content, url, storage) {
                     var wrapper = null;
-                    if (config.defaults.resources.USE_STORAGED === false || storage === false) {
+                    if (config.defaults.resources.USE_STORAGED === false || storage === false || parameters.body === null) {
                         system.resources.js.connect(
                             url,
                             function(){
@@ -2899,7 +2902,7 @@
                     }
                 };
                 function CSS(id, content, url, storage) {
-                    if (config.defaults.resources.USE_STORAGED === false || storage === false) {
+                    if (config.defaults.resources.USE_STORAGED === false || storage === false || parameters.body === null) {
                         system.resources.css.connect(
                             url,
                             null,
@@ -2924,21 +2927,16 @@
                 /// <returns type="boolean">true if success and false if not</returns>
                 var resourceType    = system.url.getTypeOfResource(parameters.url),
                     Embody          = null;
-                if (parameters.body !== null) {
-                    if (resourceType === options.resources.types.JS) {
-                        Embody = JS;
-                    } else if (resourceType === options.resources.types.CSS) {
-                        Embody = CSS;
+                if (resourceType === options.resources.types.JS) {
+                    Embody = JS;
+                } else if (resourceType === options.resources.types.CSS) {
+                    Embody = CSS;
+                }
+                if (Embody !== null) {
+                    if (Embody(parameters.id, parameters.body, parameters.url, parameters.storage) !== false) {
+                        overhead.register.done(parameters.id, parameters.url);
+                        asynchronous.wait.check();
                     }
-                    if (Embody !== null) {
-                        if (Embody(parameters.id, parameters.body, parameters.url, parameters.storage) !== false) {
-                            overhead.register.done(parameters.id, parameters.url);
-                            asynchronous.wait.check();
-                        }
-                    }
-                } else {
-                    overhead.register.done(parameters.id, parameters.url);
-                    asynchronous.wait.check();
                 }
             },
             repository  : {
@@ -3052,10 +3050,10 @@
                     request.send();
                 },
                 success : function (url, response, id, embody, storage, hash) {
-                    if (storage !== false) {
+                    if (storage !== false && response !== null && response.original !== void 0) {
                         asynchronous.repository.add({
                             url : url,
-                            body: response !== null ? response.original : null,
+                            body: response.original,
                             hash: hash
                         });
                     }
@@ -3069,27 +3067,14 @@
                     }
                 },
                 fail    : function (request, url, response, id, embody, storage, hash) {
-                    function load(type, url, response, id, embody, storage, hash) {
-                        logs.log('[ASYNCHRONOUS]:: cannot load resource: [' + url + '] cannot be loaded by XMLHttpRequest.', logs.types.WARNING);
-                        system.resources[type].connect(url,
-                            function () {
-                                asynchronous.loader.success(url, null, id, embody, storage, hash);
-                                logs.log('[ASYNCHRONOUS]:: resource: [' + url + '] was attached. Cache is not avaliable for this resource.', logs.types.WARNING);
-                            },
-                            function () {
-                                logs.log('[ASYNCHRONOUS]:: cannot load resource: [' + url + '] any how.', logs.types.CRITICAL);
-                            }
-                        );
-                    };
                     //Try attach JS
-                    if (system.url.is.js(url)) {
-                        load('js', url, response, id, embody, storage, hash);
-                    } else if (system.url.is.css(url)) {
-                        load('css', url, response, id, embody, storage, hash);
-                    } else {
-                        logs.log('[ASYNCHRONOUS]:: cannot load resource: [' + url + '].', logs.types.CRITICAL);
-                    }
-                    logs.log('[ASYNCHRONOUS]:: cannot load resource: [' + url + '].', logs.types.CRITICAL);
+                    logs.log('[ASYNCHRONOUS]:: cannot load resource: [' + url + '] cannot be loaded by XMLHttpRequest.', logs.types.WARNING);
+                    asynchronous.embody({
+                        url     : url,
+                        id      : id,
+                        body    : null,
+                        storage : false
+                    });
                 }
             },
             wait        : {

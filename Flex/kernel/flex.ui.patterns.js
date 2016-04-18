@@ -75,7 +75,9 @@
                     HOOK_BORDERS        : /\{\{|\}\}/gi,
                     GROUP_PROPERTY      : /__\w*?__/gi,
                     FIRST_WORD          : /^\w+/gi,
-                    NOT_WORDS_NUMBERS   : /[^\w\d]/gi
+                    NOT_WORDS_NUMBERS   : /[^\w\d]/gi,
+                    CONDITION_OPEN      : 'CON:',
+                    CONDITION_CLOSE     : ':CON',
                 },
                 storage     : {
                     USE_LOCALSTORAGE        : true,
@@ -131,10 +133,16 @@
                     FAIL_TO_LOAD_JS_RESOURCE: '0004:FAIL_TO_LOAD_JS_RESOURCE',
                 },
                 pattern: {
-                    CANNOT_FIND_FIRST_TAG   : '1000:CANNOT_FIND_FIRST_TAG',
-                    CANNOT_CREATE_WRAPPER   : '1001:CANNOT_CREATE_WRAPPER',
-                    WRONG_PATTERN_WRAPPER   : '1002:WRONG_PATTERN_WRAPPER',
-                    WRONG_HOOK_VALUE        : '1003:WRONG_HOOK_VALUE',
+                    CANNOT_FIND_FIRST_TAG               : '1000:CANNOT_FIND_FIRST_TAG',
+                    CANNOT_CREATE_WRAPPER               : '1001:CANNOT_CREATE_WRAPPER',
+                    WRONG_PATTERN_WRAPPER               : '1002:WRONG_PATTERN_WRAPPER',
+                    WRONG_HOOK_VALUE                    : '1003:WRONG_HOOK_VALUE',
+                    WRONG_CONDITION_DEFINITION          : '1004:WRONG_CONDITION_DEFINITION',
+                    MODEL_HOOK_NEEDS_WRAPPER            : '1005:MODEL_HOOK_NEEDS_WRAPPER',
+                    CANNOT_FIND_CONDITION_BEGINING      : '1006:CANNOT_FIND_CONDITION_BEGINING',
+                    CANNOT_FIND_CONDITION_END           : '1007:CANNOT_FIND_CONDITION_END',
+                    CANNOT_FIND_CONDITION_NODES         : '1008:CANNOT_FIND_CONDITION_NODES',
+                    CANNOT_FIND_CONDITION_VALUE         : '1009:CANNOT_FIND_CONDITION_VALUE',
                 },
                 instance : {
                     BAD_HOOK_FOR_CLONE      : '2000:BAD_HOOK_FOR_CLONE',
@@ -511,7 +519,7 @@
                         returning       = null,
                         signature       = null;
                     convert = {
-                        hooks   : {
+                        hooks       : {
                             getFromHTML : function(){
                                 var hooks = privates.html.match(settings.regs.HOOK);
                                 if (hooks instanceof Array) {
@@ -691,12 +699,12 @@
                                     };
                                 },
                             },
-                            process: function () {
+                            process     : function () {
                                 privates.hooks_html = convert.hooks.getFromHTML();
                                 convert.hooks.wrap(privates.pattern);
                             },
                         },
-                        model   : {
+                        model       : {
                             getFromHTML : function () {
                                 var models = privates.html.match(settings.regs.MODEL);
                                 if (models instanceof Array) {
@@ -755,7 +763,22 @@
                                         });
                                     }
                                 },
-                                inHTML  : function(node, model, reg_model) {
+                                inHTML  : function (node, model, reg_model) {
+                                    function validatePlaceHolder(node, model) {
+                                        if (node.childNodes !== null && node.childNodes.length > 0) {
+                                            Array.prototype.forEach.call(node.childNodes, function (child) {
+                                                if (child.nodeType !== 3) {
+                                                    if (child.className !== void 0 && child.className.indexOf(settings.css.classes.HOOK_WRAPPER) === -1) {
+                                                        flex.logs.log(signature() + logs.pattern.MODEL_HOOK_NEEDS_WRAPPER + '(model hook: ' + model + ')', flex.logs.types.CRITICAL);
+                                                        throw logs.pattern.MODEL_HOOK_NEEDS_WRAPPER;
+                                                    } else if (child.className === void 0) {
+                                                        flex.logs.log(signature() + logs.pattern.MODEL_HOOK_NEEDS_WRAPPER + '(model hook: ' + model + ')', flex.logs.types.CRITICAL);
+                                                        throw logs.pattern.MODEL_HOOK_NEEDS_WRAPPER;
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    };
                                     var reg_model = reg_model instanceof RegExp ? reg_model : new RegExp(settings.regs.MODEL_OPEN + model + settings.regs.MODEL_CLOSE, 'gi');
                                     if (node.childNodes !== void 0) {
                                         if (node.childNodes.length > 0) {
@@ -766,6 +789,7 @@
                                                     }
                                                 } else if (typeof childNode.nodeValue === 'string') {
                                                     if (helpers.testReg(reg_model, childNode.nodeValue)) {
+                                                        validatePlaceHolder(node, model);
                                                         convert.model.setAttrData(node, {
                                                             prop    : 'innerHTML',
                                                             model   : model
@@ -783,17 +807,110 @@
                                 if (models_html !== null) {
                                     models_html.forEach(function (model) {
                                         convert.model.find.inAttrs(privates.pattern, model);
-                                        convert.model.find.inHTML(privates.pattern, model);
+                                        convert.model.find.inHTML(privates.pattern, model, null);
                                     });
                                 }
                             }
                         },
-                        process : function () {
+                        conditions  : {
+                            getName : function (str){
+                                var condition = str.replace(settings.regs.CONDITION_OPEN, '');
+                                if (condition.indexOf(settings.regs.CONDITION_OPEN) === -1) {
+                                    condition = condition.split('=');
+                                    if (condition.length === 2) {
+                                        return {
+                                            name    : condition[0],
+                                            value   : condition[1]
+                                        };
+                                    }
+                                }
+                                flex.logs.log(signature() + logs.pattern.WRONG_CONDITION_DEFINITION + ' (original comment: ' + str + ')', flex.logs.types.CRITICAL);
+                                throw logs.pattern.WRONG_CONDITION_DEFINITION;
+                            },
+                            getNodes: function (condition_name, condition_node, parent) {
+                                var inside_condition    = false,
+                                    nodes               = [];
+                                try {
+                                    Array.prototype.forEach.call(parent.childNodes, function (child) {
+                                        if (inside_condition) {
+                                            if (child.nodeType === 8 && child.nodeValue.indexOf(condition_name + settings.regs.CONDITION_CLOSE) !== -1) {
+                                                inside_condition = null;
+                                                throw 'closed';
+                                            } else {
+                                                nodes.push(child);
+                                            }
+                                        } else if (child === condition_node) {
+                                            inside_condition = true;
+                                        }
+                                    });
+                                } catch (e) {
+
+                                }
+                                if (inside_condition === false) {
+                                    flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_BEGINING + ' (condition name: ' + condition_name + ')', flex.logs.types.CRITICAL);
+                                    throw logs.pattern.CANNOT_FIND_CONDITION_BEGINING;
+                                }
+                                if (inside_condition === true) {
+                                    flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_END + ' (condition name: ' + condition_name + ')', flex.logs.types.CRITICAL);
+                                    throw logs.pattern.CANNOT_FIND_CONDITION_END;
+                                }
+                                return nodes;
+                            },
+                            find    : function (node){
+                                function search(node, conditions) {
+                                    if (node.childNodes !== void 0) {
+                                        Array.prototype.forEach.call(node.childNodes, function (node) {
+                                            var condition = null;
+                                            if (node.nodeType === 8) {
+                                                if (node.nodeValue.indexOf(settings.regs.CONDITION_OPEN) === 0) {
+                                                    condition = convert.conditions.getName(node.nodeValue);
+                                                    if (conditions[condition.name] === void 0) {
+                                                        conditions[condition.name] = [];
+                                                    }
+                                                    conditions[condition.name].push({
+                                                        value   : condition.value,
+                                                        nodes   : convert.conditions.getNodes(condition.name, node, node.parentNode)
+                                                    });
+                                                }
+                                            } else if (node.childNodes !== void 0 && node.childNodes.length > 0) {
+                                                search(node, conditions);
+                                            }
+                                        });
+                                    }
+                                };
+                                var conditions = {};
+                                search(node, conditions);
+                                return conditions;
+                            },
+                            process : function (clone, _conditions) {
+                                var conditions = convert.conditions.find(clone);
+                                _object(_conditions).forEach(function (con_name, con_value) {
+                                    var found_flag = false;
+                                    if (conditions[con_name] !== void 0) {
+                                        conditions[con_name].forEach(function (condition) {
+                                            if (condition.value !== con_value) {
+                                                condition.nodes.forEach(function (node) {
+                                                    node.parentNode.removeChild(node);
+                                                });
+                                            } else {
+                                                found_flag = true;
+                                            }
+                                        });
+                                        if (!found_flag) {
+                                            flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_VALUE + ' (condition name: ' + con_name + ' = "' + con_value + '")', flex.logs.types.WARNING);
+                                        }
+                                    } else {
+                                        flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_NODES + ' (condition name: ' + con_name + ')', flex.logs.types.WARNING);
+                                    }
+                                });
+                            }
+                        },
+                        process     : function () {
                             privates.pattern = compatibility.getParent(compatibility.getFirstTagFromHTML(privates.html));
                             if (privates.pattern !== null) {
                                 privates.pattern.innerHTML = privates.html;
-                                convert.hooks.process();
-                                convert.model.process();
+                                convert.hooks.      process();
+                                convert.model.      process();
                                 return true;
                                 /*
                                 if (privates.pattern.innerHTML.replace(settings.regs.NOT_WORDS_NUMBERS, '') === privates.html.replace(settings.regs.NOT_WORDS_NUMBERS, '')) {
@@ -831,14 +948,17 @@
                                     return tag[0].replace(settings.regs.TAG_BORDERS, '').match(settings.regs.FIRST_WORD)[0].toLowerCase()
                                 }
                             }
-                            flex.logs.log(signature() + logs.pattern.CANNOT_FIND_FIRST_TAG, flex.logs.types.NOTIFICATION);
+                            flex.logs.log(signature() + logs.pattern.CANNOT_FIND_FIRST_TAG + '(Probably hook has symbol of caret inside (\\n, \\r))', flex.logs.types.NOTIFICATION);
                             return null;
                         }
-
                     };
-                    clone           = function () {
+                    clone           = function (condition_values) {
                         var hook_setters    = {},
-                            clone           = privates.pattern.cloneNode(true);
+                            clone           = privates.pattern.cloneNode(true),
+                            conditions      = null;
+                        if (condition_values !== void 0 && condition_values !== null) {
+                            convert.conditions.process(clone, condition_values);
+                        }
                         privates.hooks_html.forEach(function (hook) {
                             var _hooks = [];
                             convert.hooks.setters.inAttributes  (clone, hook, _hooks);
@@ -926,8 +1046,9 @@
                         methods     = null,
                         controller  = null,
                         cloning     = null,
+                        conditions  = null,
                         returning   = null;
-                    cloning = {
+                    cloning     = {
                         update          : function (_hooks) {
                             var _hooks  = _hooks instanceof Array ? _hooks[0] : _hooks,
                                 map     = {};
@@ -1228,6 +1349,17 @@
                             };
                         }
                     };
+                    conditions = {
+                        get: function (_hooks, _conditions) {
+                            var result = {};
+                            if (_conditions !== null) {
+                                _object(_conditions).forEach(function (name, handle) {
+                                    result[name] = handle(_hooks);
+                                });
+                            }
+                            return Object.keys(result).length > 0 ? result : null;
+                        }
+                    };
                     controller = {
                         apply: function (_instance, _resources) {
                             var _controllers = controllers.storage.get(self.url);
@@ -1239,7 +1371,7 @@
                         }
                     };
                     methods     = {
-                        build       : function (_hooks, _resources) {
+                        build       : function (_hooks, _resources, _conditions) {
                             var nodes       = [],
                                 _map        = [],
                                 _binds      = [],
@@ -1253,7 +1385,7 @@
                                 hooks_map   = cloning.update(_hooks);
                                 _hooks      = _hooks instanceof Array ? _hooks : [_hooks];
                                 _hooks.forEach(function (_hooks) {
-                                    clone = privates.pattern();
+                                    clone = privates.pattern(conditions.get(_hooks, _conditions));
                                     map.        iteration();
                                     model.      iteration();
                                     hooks.      apply(_hooks, clone.setters, hooks_map);
@@ -1281,9 +1413,9 @@
                                 handle.call(_instance, model.model, model.binds, map.map, _resources);
                             }
                         },
-                        bind        : function (hooks, resources) {
+                        bind        : function (hooks, resources, conditions) {
                             return function () {
-                                return methods.build(hooks, resources);
+                                return methods.build(hooks, resources, conditions);
                             };
                         }
                     };
@@ -1355,16 +1487,16 @@
                     clone       = function (hooks) {
                         return privates.instance.clone(privates.hooks_map, hooks);
                     };
-                    mount       = function (destination) {
+                    mount       = function (destination, replace) {
                         if (destination !== null) {
                             destination.forEach.call(destination, function (parent) {
                                 privates.nodes.forEach(function (node) {
-                                    if (!privates.replace) {
+                                    if (!replace) {
                                         parent.appendChild(node);
                                     } else {
                                         parent.parentNode.insertBefore(node, parent);
                                     }
-                                    if (privates.replace) {
+                                    if (replace) {
                                         parent.parentNode.removeChild(parent);
                                     }
                                 });
@@ -1470,7 +1602,7 @@
                                     throw logs.caller.CANNOT_GET_CHILD_PATTERN;
                                 } else {
                                     hooks.apply(_hooks);
-                                    return _instance.bind(_hooks, value.resources());
+                                    return _instance.bind(_hooks, value.resources(), value.conditions());
                                 }
                             }
                         },
@@ -1520,9 +1652,9 @@
                                     hooks.apply();
                                     privates.pattern        = instance.init(self.url);
                                     if (privates.pattern !== null) {
-                                        privates.pattern    = privates.pattern.build(privates.hooks, privates.resources);
+                                        privates.pattern    = privates.pattern.build(privates.hooks, privates.resources, privates.conditions);
                                         if (privates.pattern instanceof settings.classes.RESULT) {
-                                            privates.pattern.mount(privates.node);
+                                            privates.pattern.mount(privates.node, privates.replace);
                                             if (privates.callbacks.success !== null) {
                                                 privates.pattern.handle()(privates.callbacks.success, privates.resources);
                                             }
@@ -1543,7 +1675,7 @@
                             hooks.apply();
                             privates.pattern = instance.init(self.url);
                             if (privates.pattern !== null) {
-                                privates.pattern = privates.pattern.build(privates.hooks, privates.resources);
+                                privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions);
                                 if (privates.pattern instanceof settings.classes.RESULT) {
                                     return privates.pattern;
                                 }
@@ -1556,11 +1688,13 @@
                     returning = {
                         render      : render,
                         hooks       : function () { return privates.hooks; },
-                        resources   : function () { return privates.resources;}
-                    };
+                        resources   : function () { return privates.resources;},
+                        conditions  : function () { return privates.conditions; }
+                };
                     return {
                         render      : returning.render,
                         hooks       : returning.hooks,
+                        conditions  : returning.conditions,
                         resources   : returning.resources
                     };
                 },

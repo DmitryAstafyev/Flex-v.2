@@ -24,11 +24,11 @@
                                 { url: '/program/highcharts/highcharts-more.js',    after: ['/program/highcharts/highcharts.js'] },
                                 { url: '/program/highcharts/exporting.js',          after: ['/program/highcharts/highcharts.js'] },
                             ],
-                            storage : false,
+                            storage : true,
                             finish  : null
                         }
                     ],
-                    USE_STORAGED    : false,
+                    USE_STORAGED    : true,
                 },
                 paths   : {
                     CORE    : '/kernel',
