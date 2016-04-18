@@ -44,11 +44,11 @@
         config          = {
             defaults    : {
                 resources   : {
-                    USE_STORAGED        : { type: 'boolean',    value: true },
-                    WAIT_ASYNCHRONOUS   : { type: 'boolean',    value: true },
-                    MODULES             : { type: 'array',      value: []   },
-                    EXTERNAL            : { type: 'array',      value: []   },
-                    ASYNCHRONOUS        : { type: 'array',      value: []   }
+                    USE_STORAGED        : { type: 'boolean',    value: false    },
+                    WAIT_ASYNCHRONOUS   : { type: 'boolean',    value: true     },
+                    MODULES             : { type: 'array',      value: []       },
+                    EXTERNAL            : { type: 'array',      value: []       },
+                    ASYNCHRONOUS        : { type: 'array',      value: []       }
                 },
                 paths       : {
                     CORE    : {
@@ -173,9 +173,9 @@
         coreEvents      = {
             onFlexLoad: function () {
                 if (modules.isReady() && external.isReady() && asynchronous.isReady() && modules.attach.unexpected.isReady()) {
-                    if (config.defaults.events.onFlexLoad.__inited === void 0) {
+                    if (coreEvents.onFlexLoad.__inited === void 0) {
                         if (!patterns.execution()) {
-                            config.defaults.events.onFlexLoad.__inited = true;
+                            coreEvents.onFlexLoad.__inited = true;
                             system.handle(config.defaults.events.onFlexLoad, null, 'config.defaults.events.onFlexLoad', this);
                             if (config.defaults.events.onPageLoad !== null) {
                                 if (document.readyState !== 'complete') {
@@ -197,11 +197,12 @@
         };
         options         = {
             storage     : {
-                GROUP               : 'flex.core',
-                RESOURCES_JOURNAL   : 'flex.modules.resources.journal',
-                UNEXPECTED_JOURNAL  : 'flex.modules.unexpected.journal',
-                DEFAULT_CONFIG      : 'flex.defualt.config',
-                DEFAULT_CONFIG_FLAG : 'flex.defualt.config.flag',
+                GROUP                   : 'flex.core',
+                RESOURCES_JOURNAL       : 'flex.modules.resources.journal',
+                UNEXPECTED_JOURNAL      : 'flex.modules.unexpected.journal',
+                DEFAULT_CONFIG          : 'flex.defualt.config',
+                DEFAULT_CONFIG_FLAG     : 'flex.defualt.config.flag',
+                WAITING_REGISTER_TASKS  : 'flex.register.wait.tasts',
             },
             resources   : {
                 types   : {
@@ -278,6 +279,21 @@
             }
         };
         registry        = {
+            isReady     : function (){
+                return registry.isReady.__ready === void 0 ? false : true;
+            },
+            waiting     : {
+                add     : function (handle) {
+                    var storage = overhead.globaly.get(options.storage.GROUP, options.storage.WAITING_REGISTER_TASKS, { handles: [] });
+                    storage.handles.push(handle);
+                },
+                execute : function () {
+                    var storage = overhead.globaly.get(options.storage.GROUP, options.storage.WAITING_REGISTER_TASKS, { handles: [] });
+                    storage.handles.forEach(function (handle) {
+                        handle();
+                    });
+                }
+            },
             load        : function () {
                 function getURL(url) {
                     var path = config.defaults.paths.CORE;
@@ -303,16 +319,14 @@
             },
             onError     : function (item) {
                 var defaults = null;
+                logs.log('Fail load [' + options.registry[item].source + ']. Some flex\'s libraries will not work without that resource.', logs.types.WARNING);
                 if (typeof options.registry[item].defaults === 'object' && options.registry[item].defaults !== null) {
-                    logs.log('Fail load [' + options.registry[item].source + ']. But this module has default settings and loading will be continue.', logs.types.WARNING);
-                    options.registry[item].source   = true;
+                    logs.log('Default settings for [' + options.registry[item].source + '] was applied.', logs.types.WARNING);
                     defaults                        = oop.namespace.create(options.registry[item].defaults.path);
                     defaults                        = oop.objects.extend(options.registry[item].defaults.value, defaults.target);
-                    registry.tryFinish();
-                } else {
-                    options.registry[item].source = false;
-                    logs.log('Fail load [' + options.registry[item].source + ']. Some flex\'s libraries will not without that resource.', logs.types.WARNING);
                 }
+                options.registry[item].source = true;
+                registry.tryFinish();
             },
             tryFinish   : function () {
                 var result = true;
@@ -320,6 +334,8 @@
                     result = (options.registry[item].source === true ? result : false);
                 }
                 if (result !== false) {
+                    registry.isReady.__ready = true;
+                    registry.waiting.   execute();
                     patterns.           modification();
                     cache.              init();
                     modules.registry.   ready();
@@ -2067,7 +2083,7 @@
                             modules.attach.unexpected.launched.reset();
                         },
                     },
-                    safely      : function (parameters) {
+                    safely      : function (parameters, do_not_detect_url) {
                         function validateSRC(src) {
                             if (typeof src === 'string') {
                                 return system.url.sterilize(src. replace(config.defaults.settings.ATTACH_PATH_SIGNATURE, config.defaults.paths.ATTACH + '/'));
@@ -2130,7 +2146,14 @@
                                 modules.attach.unexpected.embody(parameters);
                             }
                         };
-                        var requaredPackageID = null;
+                        var requaredPackageID = null,
+                            do_not_detect_url = typeof do_not_detect_url === 'boolean' ? do_not_detect_url : false;
+                        if (!registry.isReady()) {
+                            //We have to wait for registry, but URL we should detect now
+                            parameters.src = system.resources.js.getCurrentSRC();
+                            registry.waiting.add(function () { modules.attach.unexpected.safely(parameters, true); });
+                            return false;
+                        }
                         if (oop.objects.validate(parameters, [  { name: 'name',             type: 'string'                          },
                                                                 { name: 'launch',           type: 'function',           value: null },
                                                                 { name: 'constructor',      type: 'function',           value: null },
@@ -2140,7 +2163,9 @@
                                                                 { name: 'onAfterAttach',    type: 'function',           value: null },
                                                                 { name: 'extend',           type: ['array', 'object'],  value: null }]) !== false) {
                             //Try get URL of script, like script is attached via tag.
-                            parameters.src = system.resources.js.getCurrentSRC();
+                            if (!do_not_detect_url) {
+                                parameters.src = system.resources.js.getCurrentSRC();
+                            }
                             //Try get URL of script, like it was inbuilt
                             parameters.src = parameters.src === null ? external.inbuilt.get.js() : parameters.src;
                             if (parameters.src !== null) {
@@ -2843,9 +2868,9 @@
                             groups,
                             function (group, index) {
                                 var id = IDs.id();
-                                if (oop.objects.validate(group, [   { name: 'resources',    type: 'array'                   },
-                                                                    { name: 'storage',      type: 'boolean',    value: true },
-                                                                    { name: 'finish',       type: 'function',   value: null }]) !== false) {
+                                if (oop.objects.validate(group, [{ name: 'resources', type: 'array' },
+                                                                    { name: 'storage', type: 'boolean', value: true },
+                                                                    { name: 'finish', type: 'function', value: null }]) !== false) {
                                     //Validate resources
                                     group.resources = group.resources.filter(function (resource) { return typeof resource.url === 'string' ? true : false; });
                                     //Make register
@@ -2859,9 +2884,9 @@
                                     );
                                     //Make calls
                                     group.resources.forEach(function (resource) {
-                                        if (oop.objects.validate(resource, [{ name: 'url',      type: 'string'                  },
-                                                                            { name: 'hash',     type: 'string', value: false    },
-                                                                            { name: 'after',    type: 'array',  value: false    }]) !== false) {
+                                        if (oop.objects.validate(resource, [{ name: 'url', type: 'string' },
+                                                                            { name: 'hash', type: 'string', value: false },
+                                                                            { name: 'after', type: 'array', value: false }]) !== false) {
                                             if (resource.hash === false) {
                                                 resource.hash = hashes.get(resource.url);
                                                 hashes.update.add(resource.url);
@@ -2872,7 +2897,11 @@
                                 }
                             }
                         );
+                    } else {
+                        coreEvents.onFlexLoad();
                     }
+                } else {
+                    coreEvents.onFlexLoad();
                 }
             },
             embody      : function (parameters) {
