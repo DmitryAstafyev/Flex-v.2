@@ -1,5 +1,5 @@
 // LICENSE
-// This file (core / module) is released under the BSD License. See [LICENSE] file for details.
+// This file (core / module) is released under the MIT License. See [LICENSE] file for details.
 /// <reference path='intellisense/flex.callers.node.intellisense.js' />
 /// <reference path='intellisense/flex.callers.nodes.intellisense.js' />
 /// <reference path='intellisense/flex.callers.object.intellisense.js' />
@@ -17,7 +17,7 @@
     Flex.prototype = (function () {
         var information     = {
                 name    : "Flex::: web tools",
-                version : "0.42",
+                version : "0.58",
                 author  : "Dmitry Astafyev",
             },
             config          = {},
