@@ -3919,7 +3919,7 @@
                 if (handle_body !== null) {
                     if (safely) {
                         try {
-                            proceed();
+                            return proceed();
                         } catch (e) {
                             logs.log(
                                 "Initializer runFunction method catch error: \r\n" +
@@ -3929,7 +3929,7 @@
                             return null;
                         }
                     } else {
-                        proceed();
+                        return proceed();
                     }
                 }
                 return null;
@@ -4397,7 +4397,7 @@
                         ///     <param name="onFinish"  type="function" >Callback on finish</param>
                         ///     <returns type="void">void</returns>
                         /// </signature>
-                        var resourceJS = document.createElement("SCRIPT"),
+                        var resourceJS  = document.createElement("SCRIPT"),
                             onFinish    = onFinish || null,
                             jsScript    = jsScript || null;
                         if (jsScript !== null) {
