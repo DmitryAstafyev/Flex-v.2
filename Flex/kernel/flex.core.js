@@ -651,7 +651,7 @@
                                 property            = parameters[index].split('=');
                                 if (property instanceof Array) {
                                     if (property.length === 2) {
-                                        params[property[0]] = property[1];
+                                        params[property[0]] = encodeURIComponent(property[1]);
                                     } else {
                                         excluded.push(parameters[index]);
                                     }
