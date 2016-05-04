@@ -682,11 +682,12 @@
                                     } catch (e) { }
                                     break;
                             }
+                            params[key] = encodeURIComponent(params[key]);
                         }
                     }
                     //Make parameters string
                     for (var key in params) {
-                        str_params = '&' + key + '=' + params[key];
+                        str_params += '&' + key + '=' + params[key];
                     }
                     str_params = str_params.replace(/^\s*\&/gi, '');
                     //Return result
