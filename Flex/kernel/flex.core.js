@@ -642,7 +642,7 @@
                         parameters = parameters.split('&');
                     }
                     if (parameters instanceof Array) {
-                        //If as parameters we have script (after it was convert to array)
+                        //If as parameters we have string (after it was convert to array)
                         Array.prototype.forEach.call(
                             parameters,
                             function (parameter, index) {
@@ -651,7 +651,7 @@
                                 property            = parameters[index].split('=');
                                 if (property instanceof Array) {
                                     if (property.length === 2) {
-                                        params[property[0]] = encodeURIComponent(property[1]);
+                                        params[property[0]] = property[1];
                                     } else {
                                         excluded.push(parameters[index]);
                                     }
@@ -682,12 +682,12 @@
                                     } catch (e) { }
                                     break;
                             }
-                            params[key] = encodeURIComponent(params[key]);
+                            params[key] = params[key];
                         }
                     }
                     //Make parameters string
                     for (var key in params) {
-                        str_params += '&' + key + '=' + params[key];
+                        str_params += '&' + key + '=' + encodeURIComponent(params[key]);
                     }
                     str_params = str_params.replace(/^\s*\&/gi, '');
                     //Return result
