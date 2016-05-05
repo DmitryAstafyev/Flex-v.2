@@ -347,23 +347,38 @@
         ajax            = {
             settings    : {
                 DEFAULT_TIMEOUT : 15000, //ms ==> 1000 ms = 1 s
-                DEFAULT_METHOD  : 'post'
+                DEFAULT_METHOD  : 'POST',
+                methods         : {
+                    POST    : 'POST',
+                    GET     : 'GET',
+                    PUT     : 'PUT',
+                    DELETE  : 'DELETE',
+                    OPTIONS : 'OPTIONS',
+                },
+                regs            : {
+                    URLENCODED  : /-urlencoded/gi,
+                    JSON        : /application\/json/gi
+                },
+                headers         :{
+                    CONTENT_TYPE    : 'Content-Type',
+                    ACCEPT          : 'Accept'
+                }
             },
             requests    : {
                 storage     : {},
                 add         : function (request) {
                     var storage = ajax.requests.storage;
-                    if (storage[request.id] === void 0) {
-                        storage[request.id] = request;
+                    if (storage[request.settings.id] === void 0) {
+                        storage[request.settings.id] = request;
                         return true;
                     }
                     return false;
                 },
                 remove      : function (request) {
                     var storage = ajax.requests.storage;
-                    if (storage[request.id] !== void 0) {
-                        storage[request.id] = null;
-                        delete storage[request.id];
+                    if (storage[request.settings.id] !== void 0) {
+                        storage[request.settings.id] = null;
+                        delete storage[request.settings.id];
                         return true;
                     }
                     return false;
@@ -372,23 +387,20 @@
                     return ajax.requests.storage[id] === void 0 ? false : true;
                 }
             },
-            create      : function (id, url, method, parameters, callbacks, timeout, headers) {
+            create      : function (url, method, parameters, callbacks, settings) {
                 /// <signature>
                 ///     <summary>Create XMLHttpRequest request</summary>
-                ///     <param name="id"            type="string, number"           >[optional] ID of request</param>
                 ///     <param name="url"           type="string"                   >URL</param>
                 ///     <returns type="object" mayBeNull="true">Instance of request</returns>
                 /// </signature>
                 /// <signature>
                 ///     <summary>Create XMLHttpRequest request</summary>
-                ///     <param name="id"            type="string, number"           >[optional] ID of request</param>
                 ///     <param name="url"           type="string"                   >URL</param>
                 ///     <param name="method"        type="string" default="post"    >[optional] POST or GET. Default POST</param>
                 ///     <returns type="object" mayBeNull="true">Instance of request</returns>
                 /// </signature>
                 /// <signature>
                 ///     <summary>Create XMLHttpRequest request</summary>
-                ///     <param name="id"            type="string, number"           >[optional] ID of request</param>
                 ///     <param name="url"           type="string"                   >URL</param>
                 ///     <param name="method"        type="string" default="post"    >[optional] POST or GET. Default POST</param>
                 ///     <param name="parameters"    type="object, string"           >[optional] Object with parameters or string of parameters</param>
@@ -396,7 +408,6 @@
                 /// </signature>
                 /// <signature>
                 ///     <summary>Create XMLHttpRequest request</summary>
-                ///     <param name="id"            type="string, number"           >[optional] ID of request</param>
                 ///     <param name="url"           type="string"                   >URL</param>
                 ///     <param name="method"        type="string" default="post"    >[optional] POST or GET. Default POST</param>
                 ///     <param name="parameters"    type="object, string"           >[optional] Object with parameters or string of parameters</param>
@@ -405,63 +416,40 @@
                 /// </signature>
                 /// <signature>
                 ///     <summary>Create XMLHttpRequest request</summary>
-                ///     <param name="id"            type="string, number"           >[optional] ID of request</param>
                 ///     <param name="url"           type="string"                   >URL</param>
                 ///     <param name="method"        type="string" default="post"    >[optional] POST or GET. Default POST</param>
                 ///     <param name="parameters"    type="object, string"           >[optional] Object with parameters or string of parameters</param>
                 ///     <param name="callbacks"     type="object"                   >[optional] Collection of callbacks [before, success, fail, reaction, timeout, headers]. </param>
-                ///     <param name="headers"       type="object"                   >[optional] Collection of headers. </param>
-                ///     <returns type="object" mayBeNull="true">Instance of request</returns>
-                /// </signature>
-                /// <signature>
-                ///     <summary>Create XMLHttpRequest request</summary>
-                ///     <param name="id"            type="string, number"           >[optional] ID of request</param>
-                ///     <param name="url"           type="string"                   >URL</param>
-                ///     <param name="method"        type="string" default="post"    >[optional] POST or GET. Default POST</param>
-                ///     <param name="parameters"    type="object, string"           >[optional] Object with parameters or string of parameters</param>
-                ///     <param name="callbacks"     type="object"                   >[optional] Collection of callbacks [before, success, fail, reaction, timeout, headers]. </param>
-                ///     <param name="headers"       type="object"                   >[optional] Collection of headers. </param>
-                ///     <param name="timeout"       type="number"                   >[optional] Number of ms for timeout</param>
+                ///     <param name="settings"      type="object"                   >[optional] Settings of request. </param>
                 ///     <returns type="object" mayBeNull="true">Instance of request</returns>
                 /// </signature>
                 var request = null,
                     Request = null;
                 //Parse parameters
-                id          = (typeof id        === 'string' ? id       : (typeof id === 'number' ? id : IDs.id()));
-                id          = (ajax.requests.isConflict(id) === false ? id : IDs.id());
                 url         = (typeof url       === 'string' ? url      : null);
-                method      = (typeof method    === 'string' ? (['post', 'get'].indexOf(method.toLowerCase()) !== -1 ? method.toLowerCase() : ajax.settings.DEFAULT_METHOD) : ajax.settings.DEFAULT_METHOD);
-                timeout     = (typeof timeout   === 'number' ? timeout  : ajax.settings.DEFAULT_TIMEOUT);
-                parameters  = ajax.parse.parameters(parameters);
+                method      = (typeof method    === 'string' ? ([
+                    ajax.settings.methods.POST,
+                    ajax.settings.methods.GET,
+                    ajax.settings.methods.PUT,
+                    ajax.settings.methods.DELETE,
+                    ajax.settings.methods.OPTIONS].indexOf(method.toUpperCase()) !== -1 ? method.toUpperCase() : ajax.settings.DEFAULT_METHOD) : ajax.settings.DEFAULT_METHOD);
+                settings    = ajax.parse.settings(settings);
+                parameters  = ajax.parse.parameters(parameters, settings);
                 callbacks   = ajax.parse.callbacks(callbacks);
-                headers     = (typeof headers === 'object' ? headers : null);
                 if (url !== null) {
                     //Define class for request
-                    Request             = function (id, url, method, parameters, callbacks, timeout, headers) {
-                        this.id                 = id;
+                    Request             = function (url, method, parameters, callbacks, settings) {
+                        this.settings           = settings;
                         this.url                = url;
                         this.method             = method;
                         this.parameters         = parameters;
                         this.callbacks          = callbacks;
-                        this.timeout            = timeout;
-                        this.headers            = headers;
                         this.timerID            = null;
                         this.response           = null;
                         this.responseHeaders    = null;
                         this.httpRequest        = null;
                     };
                     Request.prototype   = {
-                        id              : null,
-                        method          : null,
-                        url             : null,
-                        parameters      : null,
-                        callbacks       : null,
-                        timeout         : null,
-                        headers         : null,
-                        timerID         : null,
-                        response        : null,
-                        responseHeaders : null,
-                        httpRequest     : null,
                         send            : function(){
                             var self = this;
                             try {
@@ -482,15 +470,20 @@
                                 if (self.httpRequest !== null) {
                                     self.callback(self.callbacks.before);
                                     switch (self.method) {
-                                        case 'post':
+                                        case ajax.settings.methods.POST:
                                             self.httpRequest.open(self.method, self.url, true);
                                             self.setHeaders(self);
                                             self.httpRequest.send(self.parameters._parameters);
                                             break;
-                                        case 'get':
-                                            self.httpRequest.open(self.method, self.url + '?' + self.parameters._parameters, true);
+                                        case ajax.settings.methods.GET:
+                                            self.httpRequest.open(self.method, self.url + (self.parameters._parameters !== '' ? '?' : '') + self.parameters._parameters, true);
                                             self.setHeaders(self);
                                             self.httpRequest.send();
+                                            break;
+                                        default:
+                                            self.httpRequest.open(self.method, self.url, true);
+                                            self.setHeaders(self);
+                                            self.httpRequest.send(self.parameters._parameters);
                                             break;
                                     }
                                     //Set manual timeout
@@ -498,7 +491,7 @@
                                         function () {
                                             self.events.timeout(null, self);
                                         },
-                                        self.timeout
+                                        self.settings.timeout
                                     );
                                     return true;
                                 } else {
@@ -511,18 +504,15 @@
                         },
                         setHeaders      : function(self){
                             //Set headers
-                            if (self.headers !== null) {
-                                for (var key in self.headers) {
-                                    self.httpRequest.setRequestHeader(key, self.headers[key]);
+                            if (self.settings.headers !== null) {
+                                for (var key in self.settings.headers) {
+                                    self.httpRequest.setRequestHeader(key, self.settings.headers[key]);
                                 }
-                            } else {
-                                //Default header
-                                self.httpRequest.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
                             }
                         },
                         events          : {
                             readystatechange: function (event, self) {
-                                if (ajax.requests.isConflict(self.id) !== false) {
+                                if (ajax.requests.isConflict(self.settings.id) !== false) {
                                     if (event.target) {
                                         if (event.target.readyState) {
                                             self.callback(self.callbacks.reaction, event);
@@ -553,7 +543,7 @@
                                 }
                             },
                             timeout         : function (event, self) {
-                                if (ajax.requests.isConflict(self.id) !== false) {
+                                if (ajax.requests.isConflict(self.settings.id) !== false) {
                                     self.callback(self.callbacks.timeout, event);
                                     self.destroy(self);
                                 }
@@ -628,68 +618,93 @@
                         }
                     };
                     //Create and return request
-                    return new Request(id, url, method, parameters, callbacks, timeout);
+                    return new Request(url, method, parameters, callbacks, settings);
                 }
                 return null;
             },
             parse       : {
-                parameters  : function (_parameters) {
+                settings    : function (settings){
+                    var settings                        = typeof settings === 'object' ? (settings !== null ? settings : {}) : {};
+                    settings.id                         = (typeof settings.id === 'string' ? settings.id : (typeof settings.id === 'number' ? settings.id : IDs.id()));
+                    settings.id                         = (ajax.requests.isConflict(settings.id) === false      ? settings.id                       : IDs.id());
+                    settings.timeout                    = (typeof settings.timeout                      === 'number'    ? settings.timeout                      : ajax.settings.DEFAULT_TIMEOUT);
+                    settings.doNotChangeHeaders         = typeof settings.doNotChangeHeaders            === 'boolean'   ? settings.doNotChangeHeaders           : false,
+                    settings.doNotChangeParameters      = typeof settings.doNotChangeParameters         === 'boolean'   ? settings.doNotChangeParameters        : false,
+                    settings.doNotEncodeParametersAsURL = typeof settings.doNotEncodeParametersAsURL    === 'boolean'   ? settings.doNotEncodeParametersAsURL   : false,
+                    settings.headers                    = ajax.parse.headers(settings);
+                    return settings;
+                },
+                parameters  : function (_parameters, settings) {
                     var parameters  = _parameters,
                         params      = {},
                         str_params  = '',
-                        excluded    = [];
-                    if (typeof parameters === 'string') {
-                        parameters = parameters.split('&');
-                    }
-                    if (parameters instanceof Array) {
-                        //If as parameters we have string (after it was convert to array)
-                        Array.prototype.forEach.call(
-                            parameters,
-                            function (parameter, index) {
-                                var property = null;
-                                parameters[index]   = param.replace(/^\s*\?/gi, '');
-                                property            = parameters[index].split('=');
-                                if (property instanceof Array) {
-                                    if (property.length === 2) {
-                                        params[property[0]] = property[1];
+                        excluded    = [],
+                        encodeURI   = null;
+                    if (!settings.doNotChangeParameters) {
+                        if (parameters instanceof Array) {
+                            //If as parameters we have string (after it was convert to array)
+                            Array.prototype.forEach.call(
+                                parameters,
+                                function (parameter, index) {
+                                    var property = null;
+                                    parameters[index]   = param.replace(/^\s*\?/gi, '');
+                                    property            = parameters[index].split('=');
+                                    if (property instanceof Array) {
+                                        if (property.length === 2) {
+                                            params[property[0]] = property[1];
+                                        } else {
+                                            excluded.push(parameters[index]);
+                                        }
                                     } else {
                                         excluded.push(parameters[index]);
                                     }
-                                } else {
-                                    excluded.push(parameters[index]);
                                 }
-                            }
-                        );
-                    } else if (typeof parameters === 'object' && parameters !== null) {
-                        //If as parameters we have object
-                        for (var key in parameters) {
-                            switch(typeof parameters[key]){
-                                case 'string':
-                                    params[key] = parameters[key];
-                                    break;
-                                case 'boolean':
-                                    params[key] = parameters[key].toString();
-                                    break;
-                                case 'number':
-                                    params[key] = parameters[key].toString();
-                                    break;
-                                case 'object':
-                                    params[key] = JSON.stringify(parameters[key]);
-                                    break;
-                                default:
-                                    try{
+                            );
+                        } else if (typeof parameters === 'object' && parameters !== null) {
+                            //If as parameters we have object
+                            for (var key in parameters) {
+                                switch(typeof parameters[key]){
+                                    case 'string':
+                                        params[key] = parameters[key];
+                                        break;
+                                    case 'boolean':
+                                        params[key] = parameters[key].toString();
+                                        break;
+                                    case 'number':
+                                        params[key] = parameters[key].toString();
+                                        break;
+                                    case 'object':
                                         params[key] = JSON.stringify(parameters[key]);
-                                    } catch (e) { }
-                                    break;
+                                        break;
+                                    default:
+                                        try{
+                                            params[key] = JSON.stringify(parameters[key]);
+                                        } catch (e) { }
+                                        break;
+                                }
+                                params[key] = params[key];
                             }
-                            params[key] = params[key];
                         }
+                        if (typeof _parameters !== 'string') {
+                            //Make parameters string
+                            ajax.settings.regs.JSON.lastIndex       = 0;
+                            ajax.settings.regs.URLENCODED.lastIndex = 0;
+                            if (ajax.settings.regs.JSON.test(settings.headers[ajax.settings.headers.CONTENT_TYPE])) {
+                                str_params = JSON.stringify(params);
+                            } else {
+                                encodeURI = ajax.settings.regs.URLENCODED.test(settings.headers[ajax.settings.headers.CONTENT_TYPE]);
+                                encodeURI = settings.doNotEncodeParametersAsURL ? false : encodeURI;
+                                for (var key in params) {
+                                    str_params += '&' + key + '=' + encodeURI ? encodeURIComponent(params[key]) : params[key];
+                                }
+                                str_params = str_params.replace(/^\s*\&/gi, '');
+                            }
+                        } else {
+                            str_params = _parameters;
+                        }
+                    } else {
+                        str_params  = _parameters;
                     }
-                    //Make parameters string
-                    for (var key in params) {
-                        str_params += '&' + key + '=' + encodeURIComponent(params[key]);
-                    }
-                    str_params = str_params.replace(/^\s*\&/gi, '');
                     //Return result
                     return {
                         original    : _parameters,
@@ -717,8 +732,33 @@
                         }
                     }
                     return callbacks;
+                },
+                headers     : function (settings) {
+                    var _headers = {};
+                    if (!settings.doNotChangeHeaders) {
+                        if (typeof settings.headers === 'object' && settings.headers !== null) {
+                            oop.objects.forEach(settings.headers, function (key, value) {
+                                var parts = key.split('-');
+                                parts.forEach(function (part, index) {
+                                    parts[index] = part.charAt(0).toUpperCase() + part.slice(1);
+                                });
+                                _headers[parts.join('-')] = value;
+                            });
+                        }
+                        //Default headers
+                        if (_headers[ajax.settings.headers.CONTENT_TYPE] === void 0) {
+                            _headers[ajax.settings.headers.CONTENT_TYPE] = 'application/x-www-form-urlencoded';
+                        }
+                        if (_headers[ajax.settings.headers.ACCEPT] === void 0) {
+                            _headers[ajax.settings.headers.ACCEPT] = '*/*';
+                        }
+                    } else {
+                        _headers = typeof settings.headers === 'object' ? (settings.headers !== null ? settings.headers : {}) : {};
+                    }
+                    settings.headers = _headers;
+                    return settings.headers;
                 }
-            }
+            },
         };
         oop             = {
             namespace   : {
@@ -1534,16 +1574,13 @@
                         if (hashes.update.queue.isWorking(key) === false) {
                             hashes.update.queue.work(key);
                             request = ajax.create(
-                                null,
                                 value.url,
-                                'get',
+                                ajax.settings.methods.GET,
                                 null,
                                 {
                                     headers : function (response, request) { hashes.update.processing   (key, value.url, request); },
                                     fail    : function (response, request) { hashes.update.fail         (key, value.url, request); }
-                                },
-                                null,
-                                null
+                                }
                             );
                             request.send();
                         }
@@ -2258,20 +2295,18 @@
                 loader: {
                     load    : function (url, hash, autoHash) {
                         var request = ajax.create(
-                            null,
-                            url,
-                            'get',
-                            null,
-                            {
-                                success : function (response, request) {
-                                    modules.resources.loader.success(url, response, hash);
-                                },
-                                fail    : function (response, request) {
-                                    modules.resources.loader.fail(request, url, response, hash);
-                                },
-                            },
-                            null
-                        );
+                                url,
+                                ajax.settings.methods.GET,
+                                null,
+                                {
+                                    success : function (response, request) {
+                                        modules.resources.loader.success(url, response, hash);
+                                    },
+                                    fail    : function (response, request) {
+                                        modules.resources.loader.fail(request, url, response, hash);
+                                    },
+                                }
+                            );
                         request.send();
                     },
                     success : function (url, response, hash) {
@@ -2803,20 +2838,18 @@
             loader      : {
                 load    : function (url, hash, embody, callback) {
                     var request = ajax.create(
-                        null,
-                        url,
-                        'get',
-                        null,
-                        {
-                            success : function (response, request) {
-                                external.loader.success(url, response, hash, embody, callback);
-                            },
-                            fail    : function (response, request) {
-                                external.loader.fail(request, url, hash, embody, callback);
+                            url,
+                            ajax.settings.methods.GET,
+                            null,
+                            {
+                                success : function (response, request) {
+                                    external.loader.success(url, response, hash, embody, callback);
+                                },
+                                fail    : function (response, request) {
+                                    external.loader.fail(request, url, hash, embody, callback);
+                                }
                             }
-                        },
-                        null
-                    );
+                        );
                     request.send();
                     logs.log('[EXTERNAL]:: resource: [' + url + '] will be reloaded.', logs.types.KERNEL_LOGS);
                 },
@@ -3063,9 +3096,8 @@
             loader      : {
                 load    : function (url, id, embody, storage, hash) {
                     var request = ajax.create(
-                            null,
                             url,
-                            'get',
+                            ajax.settings.methods.GET,
                             null,
                             {
                                 success : function (response, request) {
@@ -3074,8 +3106,7 @@
                                 fail    : function (response, request) {
                                     asynchronous.loader.fail(request, url, response, id, embody, storage, hash);
                                 }
-                            },
-                            null
+                            }
                         );
                     request.send();
                 },
@@ -5117,7 +5148,14 @@
                 }
             },
             ajax            : {
-                send : ajax.create
+                send    : ajax.create,
+                methods : {
+                    POST    : ajax.settings.methods.POST,
+                    GET     : ajax.settings.methods.GET,
+                    PUT     : ajax.settings.methods.PUT,
+                    DELETE  : ajax.settings.methods.DELETE,
+                    OPTIONS : ajax.settings.methods.OPTIONS,
+                }
             },
             logs            : {
                 parseError  : logs.parseError,
@@ -5254,7 +5292,8 @@
                 }
             },
             ajax            : {
-                send : privates.ajax.send
+                send    : privates.ajax.send,
+                methods : privates.ajax.methods
             },
             resources       : {
                 parse   : {

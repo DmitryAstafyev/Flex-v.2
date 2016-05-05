@@ -210,9 +210,8 @@
                         }
                         if (storaged === null) {
                             ajax = flex.ajax.send(
-                                null,
                                 parameters.url,
-                                'get',
+                                flex.ajax.methods.GET,
                                 null,
                                 {
                                     success : function (response, request) {
@@ -221,8 +220,7 @@
                                     fail    : function (response, request) {
                                         transport.fail(request, parameters);
                                     },
-                                },
-                                null
+                                }
                             );
                             ajax.send();
                             return true;

@@ -178,9 +178,8 @@
                             } else {
                                 perf_id = measuring.measure();
                                 ajax    = flex.ajax.send(
-                                    null,
                                     self.url,
-                                    'get',
+                                    flex.ajax.methods.GET,
                                     null,
                                     {
                                         success: function (response, request) {
@@ -194,8 +193,7 @@
                                             callback(fail);
                                             throw logs.source.FAIL_TO_LOAD_TEMPLATE;
                                         },
-                                    },
-                                    null
+                                    }
                                 );
                                 ajax.send();
                             }
@@ -382,11 +380,16 @@
                                                         url,
                                                         function () {
                                                             flex.overhead.register.done(register_id, url);
-                                                            var request = flex.ajax.send(null, url, 'get', null, {
+                                                            var request = flex.ajax.send(
+                                                                url,
+                                                                flex.ajax.methods.GET,
+                                                                null,
+                                                                {
                                                                     success: function (response, request) {
                                                                         storage.add(url, response.original);
                                                                     },
-                                                                }, null);
+                                                                }
+                                                            );
                                                             request.send();
                                                             measuring.measure(perf_id, 'loading resources for (' + self.url + '):: ' + url);
                                                         },
