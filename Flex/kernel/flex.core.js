@@ -895,7 +895,7 @@
                         proto           = null;
                     if (!(this instanceof oop.classes.create)) {
                         if (parent !== null) {
-                            temp                = function () { };
+                            temp                = parent;
                             temp.prototype      = parent.prototype;
                             proto               = typeof prototype === 'function' ? prototype.call(new constr(), privates) : prototype;
                             constr.prototype    = new temp();
