@@ -63,7 +63,7 @@
                     JS_TYPE             : /type\s*=\s*"text\/javascript"|type\s*=\s*'text\/javascript'/gi,
                     STRING              : /"(.*?)"|'(.*?)'/gi,
                     STRING_BORDERS      : /"|'/gi,
-                    HOOK                : /\{\{\w*?\}\}/gi,
+                    HOOK                : /\{\{[\w\.\[\]]*?\}\}/gi,
                     MODEL               : /\{\{\:\:\w*?\}\}/gi,
                     MODEL_BORDERS       : /\{\{\:\:|\}\}/gi,
                     MODEL_OPEN          : '\\{\\{\\:\\:',
@@ -430,7 +430,7 @@
                     signature   = function () {
                         return logs.SIGNATURE + ':: pattern (' + self.url + ')';
                     };
-                    returning = {
+                    returning   = {
                         load : load,
                         html : get.html,
                     };
@@ -521,7 +521,7 @@
                         clone           = null,
                         returning       = null,
                         signature       = null;
-                    convert = {
+                    convert         = {
                         hooks       : {
                             getFromHTML : function(){
                                 var hooks = privates.html.match(settings.regs.HOOK);
@@ -982,7 +982,7 @@
                     signature       = function () {
                         return logs.SIGNATURE + ':: pattern (' + self.url + ')';
                     };
-                    returning = {
+                    returning       = {
                         build   : convert.process,
                         clone   : clone
                     };
@@ -1113,6 +1113,9 @@
                                     _object(_hooks).forEach(function (hook_name, hook_value) {
                                         if (typeof hook_value === 'function') {
                                             _hooks[hook_name] = hook_value();
+                                        } else if (typeof hook_value === 'object' && hook_value !== null) {
+                                            hooks.convertObj(hook_value, _hooks, hook_name);
+                                            delete _hooks[hook_name];
                                         }
                                     });
                                 }
@@ -1137,6 +1140,16 @@
                                 });
                             }
                         },
+                        convertObj  : function (hook_obj, _hooks, parent) {
+                            _object(hook_obj).forEach(function (key, value) {
+                                var path = parent + '.' + key;
+                                if (typeof value === 'object' && value !== null) {
+                                    hooks.convertObj(value, _hooks, path);
+                                } else {
+                                    _hooks[path] = value;
+                                }
+                            });
+                        }
                     };
                     map         = {
                         current     : {},
@@ -1352,7 +1365,7 @@
                             };
                         }
                     };
-                    conditions = {
+                    conditions  = {
                         get: function (_hooks, _conditions) {
                             var result = {};
                             if (_conditions !== null) {
@@ -1363,7 +1376,7 @@
                             return Object.keys(result).length > 0 ? result : null;
                         }
                     };
-                    controller = {
+                    controller  = {
                         apply: function (_instance, _resources) {
                             var _controllers = controllers.storage.get(self.url);
                             if (_controllers !== null) {
@@ -1482,7 +1495,7 @@
             };
             //END: instance class ===============================================
             //BEGIN: result class ===============================================
-            result = {
+            result      = {
                 proto       : function (privates) {
                     var mount       = null,
                         returning   = null,
@@ -1561,7 +1574,7 @@
             };
             //END: result class ===============================================
             //BEGIN: caller class ===============================================
-            caller = {
+            caller      = {
                 proto   : function(privates){
                     var self        = this,
                         mount       = null,
