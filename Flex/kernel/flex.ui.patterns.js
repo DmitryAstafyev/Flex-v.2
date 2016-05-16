@@ -963,6 +963,9 @@
                                                 });
                                             };
                                             listeners[name].target = nodes.length === 1 ? nodes[0] : nodes;
+                                            Array.prototype.forEach.call(nodes, function (node, number) {
+                                                node.removeAttribute(settings.css.attrs.LISTENER_MARK);
+                                            });
                                         }
                                     });
                                 }
