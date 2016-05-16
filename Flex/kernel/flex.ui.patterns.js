@@ -63,7 +63,10 @@
                     JS_TYPE             : /type\s*=\s*"text\/javascript"|type\s*=\s*'text\/javascript'/gi,
                     STRING              : /"(.*?)"|'(.*?)'/gi,
                     STRING_BORDERS      : /"|'/gi,
-                    HOOK                : /\{\{[\w\.\[\]]*?\}\}/gi,
+                    LISTENER            : /\{\{@[\w\.\,]*?\}\}/gi,
+                    LISTENER_OPEN       : '\\{\\{@',
+                    LISTENER_CLOSE      : '\\}\\}',
+                    HOOK                : /\{\{[\w\.]*?\}\}/gi,
                     MODEL               : /\{\{\:\:\w*?\}\}/gi,
                     MODEL_BORDERS       : /\{\{\:\:|\}\}/gi,
                     MODEL_OPEN          : '\\{\\{\\:\\:',
@@ -117,7 +120,8 @@
                         HOOK_WRAPPER    : 'flex_patterns_hook_wrapper'
                     },
                     attrs       : {
-                        MODEL_DATA: 'flex-model-data'
+                        MODEL_DATA      : 'data-flex-model-data',
+                        LISTENER_MARK   : 'data-flex-listener-mark',
                     },
                     selectors   : {
                         HOOK_WRAPPERS: '.flex_patterns_hook_wrapper'
@@ -908,9 +912,70 @@
                                 });
                             }
                         },
+                        listeners   : {
+                            getFromHTML : function () {
+                                var listeners   = privates.html.match(settings.regs.LISTENER),
+                                    _listeners  = [];
+                                if (listeners instanceof Array) {
+                                    listeners = (function (listeners) {
+                                        var history = {};
+                                        return listeners.filter(function (listener) {
+                                            if (history[listener] === void 0) {
+                                                history[listener] = true;
+                                                return true;
+                                            } else {
+                                                return false;
+                                            }
+                                        });
+                                    }(listeners));
+                                    listeners.forEach(function (listener, index) {
+                                        var _listener = listener.replace(new RegExp(settings.regs.LISTENER_OPEN,    'gi'), '')
+                                                                .replace(new RegExp(settings.regs.LISTENER_CLOSE,   'gi'), '');
+                                        privates.html = privates.html.replace(
+                                            new RegExp(settings.regs.LISTENER_OPEN + _listener.replace(/\./gi, '\\.') + settings.regs.LISTENER_CLOSE, 'gi'), 
+                                            ' ' + settings.css.attrs.LISTENER_MARK + '="' + _listener + '" ');
+                                        _listener = _listener.split(',');
+                                        _listener.forEach(function (listener) {
+                                            listener = listener.replace(/\s/gi);
+                                            if (_listeners.indexOf(listener) === -1) {
+                                                _listeners.push(listener);
+                                            }
+                                        });
+                                    });
+                                    return _listeners;
+                                }
+                            },
+                            getFromDOM  : function (clone) {
+                                var listeners = {};
+                                if (privates.listeners instanceof Array) {
+                                    privates.listeners.forEach(function (listener) {
+                                        listeners[listener] = _nodes('*[' + settings.css.attrs.LISTENER_MARK + '*="' + listener + '"]', false, clone);
+                                        if (listeners[listener].target !== null) {
+                                            listeners[listener] = listeners[listener].target;
+                                        }
+                                    });
+                                    _object(listeners).forEach(function (name, nodes) {
+                                        if (listeners[name] !== null) {
+                                            listeners[name] = function on(event, handle) {
+                                                Array.prototype.forEach.call(nodes, function (node, number) {
+                                                    node.__number = number;
+                                                    flex.events.DOM.add(node, event, handle);
+                                                });
+                                            };
+                                            listeners[name].target = nodes.length === 1 ? nodes[0] : nodes;
+                                        }
+                                    });
+                                }
+                                return listeners;
+                            },
+                            process     : function () {
+                                privates.listeners = convert.listeners.getFromHTML();
+                            }
+                        },
                         process     : function () {
                             privates.pattern = compatibility.getParent(compatibility.getFirstTagFromHTML(privates.html));
                             if (privates.pattern !== null) {
+                                convert.listeners.  process();
                                 privates.pattern.innerHTML = privates.html;
                                 convert.hooks.      process();
                                 convert.model.      process();
@@ -975,8 +1040,9 @@
                             }(_hooks));
                         });
                         return {
-                            clone   : clone,
-                            setters : hook_setters
+                            clone       : clone,
+                            setters     : hook_setters,
+                            listeners   : convert.listeners.getFromDOM(clone)
                         };
                     };
                     signature       = function () {
@@ -1003,6 +1069,7 @@
                                 html                : parameters.html,
                                 pattern             : null,
                                 hooks_html          : null,
+                                listeners           : null,
                             },
                             prototype       : pattern.proto
                         }).createInstanceClass();
@@ -1046,6 +1113,7 @@
                         map         = null,
                         hooks       = null,
                         model       = null,
+                        listeners   = null,
                         methods     = null,
                         controller  = null,
                         cloning     = null,
@@ -1128,9 +1196,10 @@
                                     var value = null;
                                     if (hooks[key] !== void 0) {
                                         if (hooks[key] instanceof settings.classes.RESULT) {
-                                            map.    current[key] = hooks[key].map();
-                                            model.  current.model['__' + key + '__']    = hooks[key].model();
-                                            model.  current.binds['__' + key + '__']    = hooks[key].binds();
+                                            map.        current[key] = hooks[key].map();
+                                            model.      current.model   ['__' + key + '__'] = hooks[key].model();
+                                            model.      current.binds   ['__' + key + '__'] = hooks[key].binds();
+                                            listeners.  current         ['__' + key + '__'] = hooks[key].listeners();
                                             hooks_map[key]                              = hooks[key].hooks_map()
                                         }
                                         hook_setter(hooks[key]);
@@ -1365,6 +1434,122 @@
                             };
                         }
                     };
+                    listeners   = {
+                        current     : null,
+                        listeners   : null,
+                        update      : function (_listeners) {
+                            if (Object.keys(listeners.current).length > 0) {
+                                _object(listeners.current).forEach(function (key, value) {
+                                    _listeners[key] = value;
+                                });
+                            }
+                            if (listeners.listeners === null) {
+                                listeners.listeners = {};
+                            } else if (typeof listeners.listeners === 'object' && !(listeners.listeners instanceof Array)) {
+                                listeners.listeners = [listeners.listeners];
+                            }
+                            if (listeners.listeners instanceof Array) {
+                                listeners.listeners.push(_listeners);
+                            } else {
+                                listeners.listeners = _listeners;
+                            }
+                        },
+                        reset       : function(){
+                            listeners.listeners = null;
+                        },
+                        iteration   : function () {
+                            listeners.current = {};
+                        },
+                        collapse    : function () {
+                            function process(source, storage, indexes) {
+                                function getFromArray(source, storage, indexes) {
+                                    var names       = [],
+                                        sub_objs    = [];
+                                    if (source.length > 0 && typeof source[0] === 'object' && source[0] !== null) {
+                                        _object(source[0]).forEach(function (name) {
+                                            names.push(name);
+                                        });
+                                        names.forEach(function (name) {
+                                            storage[name] = [];
+                                            source.forEach(function (value, index) {
+                                                if (value[name] !== void 0 && typeof value[name] === 'function') {
+                                                    storage[name].push({ caller: value[name], index: (indexes === '' ? '' : indexes + ',') + index.toString() });
+                                                } else if (value[name] instanceof Array) {
+                                                    storage[name].push({});
+                                                    getFromArray(value[name], storage[name][storage[name].length - 1], (indexes === '' ? '' : indexes + ',') + index.toString())
+                                                    if (sub_objs.indexOf(name) === -1) {
+                                                        sub_objs.push(name);
+                                                    }
+                                                } else if (typeof value[name] === 'object' && value[name] !== null) {
+                                                    storage[name].push(value[name]);
+                                                    if (sub_objs.indexOf(name) === -1) {
+                                                        sub_objs.push(name);
+                                                    }
+                                                }
+                                            });
+                                        });
+                                        sub_objs.forEach(function (name) {
+                                            var source = storage[name];
+                                            storage[name] = {};
+                                            getFromArray(source, storage[name], indexes);
+                                        });
+                                        _object(storage).forEach(function (name, value) {
+                                            var handles = [];
+                                            if (value instanceof Array) {
+                                                handles = value.map(function (value) {
+                                                    var indexes = value.index.split(',').map(function (index) { return index !== '' ? parseInt(index, 10) : -1; }),
+                                                        _handle = value.caller,
+                                                        _target = value.caller.target;
+                                                    if (value.caller.indexed !== void 0) {
+                                                        return function on(event, handle) {
+                                                            _handle(event, handle);
+                                                        };
+                                                    } else {
+                                                        return function on(event, handle) {
+                                                            _handle(event, handle.bind({ indexes: indexes, target: _target }));
+                                                        };
+                                                    }
+                                                    return function on(event, handle) {
+                                                        _handle(event, handle.bind({ indexes: indexes, target: _target }));
+                                                    };
+                                                });
+                                                storage[name] = function on(event, handle) {
+                                                    handles.forEach(function (_handle) {
+                                                        _handle(event, handle);
+                                                    });
+                                                };
+                                                storage[name].indexed = true;
+                                            }
+                                        });
+                                        return storage[name];
+                                    }
+                                };
+                                _object(source).forEach(function (name, value) {
+                                    if (value instanceof Array) {
+                                        storage[name] = {};
+                                        getFromArray(value, storage[name], indexes);
+                                    } else if (typeof value === 'function') {
+                                        storage[name] = function on(event, handle) {
+                                            value(event, handle.bind({
+                                                indexes: indexes.split(',').map(function (index) { return index !== '' ? parseInt(index, 10) : -1; }), target: value.target
+                                            }));
+                                        };
+                                    } else if (typeof value === 'object' && typeof value !== 'function') {
+                                        storage[name] = {};
+                                        process(value, storage[name], indexes);
+                                    }
+                                });
+                            };
+                            var _listeners = {};
+                            if (listeners.listeners !== null) {
+                                process(listeners.listeners, _listeners, '');
+                            }
+                            return {
+                                listed  : listeners.listeners,
+                                grouped : _listeners
+                            };
+                        }
+                    };
                     conditions  = {
                         get: function (_hooks, _conditions) {
                             var result = {};
@@ -1395,8 +1580,9 @@
                                 hooks_map   = null,
                                 _instance   = null;
                             if (_hooks !== null) {
-                                map.    reset();
-                                model.  reset();
+                                map.        reset();
+                                model.      reset();
+                                listeners.  reset();
                                 _hooks      = hooks.build(_hooks);
                                 hooks_map   = cloning.update(_hooks);
                                 _hooks      = _hooks instanceof Array ? _hooks : [_hooks];
@@ -1404,10 +1590,12 @@
                                     clone = privates.pattern(conditions.get(_hooks, _conditions));
                                     map.        iteration();
                                     model.      iteration();
+                                    listeners.  iteration();
                                     hooks.      apply(_hooks, clone.setters, hooks_map);
                                     map.        update(clone.clone);
                                     model.      update(clone.clone);
                                     model.      clear(clone.clone);
+                                    listeners.  update(clone.listeners);
                                     nodes = nodes.concat(Array.prototype.filter.call(clone.clone.childNodes, function () { return true; }));
                                 });
                             }
@@ -1417,6 +1605,7 @@
                                 map         : map.map,
                                 model       : model.model,
                                 binds       : model.binds,
+                                listeners   : listeners.listeners,
                                 hooks_map   : hooks_map,
                                 instance    : privates.__instance,
                                 handle      : function (handle, _resources) { return methods.handle(handle, _instance, _resources); }
@@ -1426,7 +1615,13 @@
                         },
                         handle      : function (handle, _instance, _resources) {
                             if (typeof handle === 'function') {
-                                handle.call(_instance, model.model, model.binds, map.map, _resources);
+                                handle.call(_instance, {
+                                    model       : model.model,
+                                    binds       : model.binds,
+                                    map         : map.map,
+                                    listeners   : listeners.collapse(),
+                                    resources   : _resources,
+                                });
                             }
                         },
                         bind        : function (hooks, resources, conditions) {
@@ -1523,6 +1718,7 @@
                         nodes       : function () { return privates.nodes;      },
                         map         : function () { return privates.map;        },
                         model       : function () { return privates.model;      },
+                        listeners   : function () { return privates.listeners;  },
                         binds       : function () { return privates.binds;      },
                         handle      : function () { return privates.handle;     },
                         hooks_map   : function () { return privates.hooks_map;  },
@@ -1534,6 +1730,7 @@
                         nodes       : returning.nodes,
                         mount       : returning.mount,
                         map         : returning.map,
+                        listeners   : returning.listeners,
                         model       : returning.model,
                         binds       : returning.binds,
                         hooks_map   : returning.hooks_map,
@@ -1550,22 +1747,24 @@
                                                                 { name: 'instance',     type: 'object',             value: null     },
                                                                 { name: 'map',          type: ['object', 'array'],  value: null     },
                                                                 { name: 'model',        type: ['object', 'array'],  value: null     },
+                                                                { name: 'listeners',    type: ['object', 'array'],  value: null     },
                                                                 { name: 'binds',        type: ['object', 'array'],  value: null     }]) !== false) {
                         return _object({
-                            parent  : settings.classes.RESULT,
-                            constr  : function () {
+                            parent      : settings.classes.RESULT,
+                            constr      : function () {
                                 this.url = flex.system.url.restore(parameters.url);
                             },
-                            privates: {
+                            privates    : {
                                 nodes       : parameters.nodes,
                                 map         : parameters.map,
                                 model       : parameters.model,
                                 binds       : parameters.binds,
+                                listeners   : parameters.listeners,
                                 handle      : parameters.handle,
                                 hooks_map   : parameters.hooks_map,
                                 instance    : parameters.instance,
                             },
-                            prototype: result.proto
+                            prototype   : result.proto
                         }).createInstanceClass();
                     } else {
                         return null;
