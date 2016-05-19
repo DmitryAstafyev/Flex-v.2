@@ -19,7 +19,6 @@
         var protofunction = function () { };
         protofunction.prototype = function () {
             var //Get modules
-                html        = flex.libraries.html.create(),
                 settings    = null,
                 //Classes
                 source      = null,
@@ -38,20 +37,23 @@
                 callers     = null;
             //Settings
             settings    = {
-                measuring   : {
+                measuring       : {
                     MEASURE : true,
                 },
-                classes     : {
+                classes         : {
                     SOURCE  : function(){},
                     PATTERN : function(){},
                     INSTANCE: function(){},
                     RESULT  : function(){},
                     CALLER  : function(){},
                 },
-                regs        : {
-                    BODY                : /<body>(\n|\r|\s|.)*?<\/body>/gi,
-                    BODY_TAG            : /<\s*body\s*>|<\s*\/\s*body\s*>/gi,
+                regs            : {
+                    BODY                : /<\s*body[^>]*>(\n|\r|\s|.)*?<\s*\/body\s*>/gi,
+                    BODY_TAG            : /<\s*body[^>]*>|<\s*\/\s*body\s*>/gi,
                     BODY_CLEAR          : /^[\n\r\s]*|[\n\r\s]*$/gi,
+                    TABLE               : /<\s*table[^>]*>(\n|\r|\s|.)*?<\s*\/table\s*>/gi,
+                    TABLE_TAG           : /<\s*table[^>]*>|<\s*\/\s*table\s*>/gi,
+                    ANY_TAG             : /<\s*[\w]{1,}[^>]*>(\n|\r|\s|\t|.)*<\s*\/\s*\w{1,}\s*>/gi,
                     FIRST_TAG           : /^\<.*?\>/gi,
                     TAG_BORDERS         : /<|>/gi,
                     CSS                 : /<link\s+.*?\/>|<link\s+.*?\>/gi,
@@ -63,9 +65,9 @@
                     JS_TYPE             : /type\s*=\s*"text\/javascript"|type\s*=\s*'text\/javascript'/gi,
                     STRING              : /"(.*?)"|'(.*?)'/gi,
                     STRING_BORDERS      : /"|'/gi,
-                    LISTENER            : /\{\{@[\w\.\,]*?\}\}/gi,
-                    LISTENER_OPEN       : '\\{\\{@',
-                    LISTENER_CLOSE      : '\\}\\}',
+                    DOM                 : /\{\{\$[\w\.\,]*?\}\}/gi,
+                    DOM_OPEN            : '\\{\\{\\$',
+                    DOM_CLOSE           : '\\}\\}',
                     HOOK                : /\{\{[\w\.]*?\}\}/gi,
                     MODEL               : /\{\{\:\:\w*?\}\}/gi,
                     MODEL_BORDERS       : /\{\{\:\:|\}\}/gi,
@@ -82,7 +84,10 @@
                     CONDITION_OPEN      : 'CON:',
                     CONDITION_CLOSE     : ':CON',
                 },
-                storage     : {
+                marks           : {
+                    DOM         : 'DOM',
+                },
+                storage         : {
                     USE_LOCALSTORAGE        : true,
                     VIRTUAL_STORAGE_GROUP   : 'FLEX_UI_PATTERNS_GROUP',
                     VIRTUAL_STORAGE_ID      : 'FLEX_UI_PATTERNS_STORAGE',
@@ -95,7 +100,7 @@
                     PATTERN_SOURCES         : 'FLEX_PATTERNS_PATTERN_SOURCES',
                     PATTERNS                : 'FLEX_PATTERNS_PATTERNS',
                 },
-                compatibility: {
+                compatibility   : {
                     PARENT_TO_CHILD : {
                         table   : 'tbody',
                         tbody   : 'tr',
@@ -115,17 +120,20 @@
                     },
                     BASE            : 'div'
                 },
-                css     : {
+                css             : {
                     classes     : {
                         HOOK_WRAPPER    : 'flex_patterns_hook_wrapper'
                     },
                     attrs       : {
                         MODEL_DATA      : 'data-flex-model-data',
-                        LISTENER_MARK   : 'data-flex-listener-mark',
+                        DOM_MARK        : 'data-flex-dom-mark',
                     },
                     selectors   : {
                         HOOK_WRAPPERS: '.flex_patterns_hook_wrapper'
                     },
+                },
+                other           : {
+                    INDEXES     : '__indexes'
                 }
             };
             logs        = {
@@ -227,6 +235,7 @@
                                 if (body.length === 1) {
                                     privates.html       = body[0].replace(regs.BODY_TAG, '').replace(regs.BODY_CLEAR, '');
                                     privates.original   = html;
+                                    privates.html       = helpers.tableFix(privates.html);
                                     return true;
                                 }
                             }
@@ -912,73 +921,76 @@
                                 });
                             }
                         },
-                        listeners   : {
-                            getFromHTML : function () {
-                                var listeners   = privates.html.match(settings.regs.LISTENER),
-                                    _listeners  = [];
-                                if (listeners instanceof Array) {
-                                    listeners = (function (listeners) {
-                                        var history = {};
-                                        return listeners.filter(function (listener) {
-                                            if (history[listener] === void 0) {
-                                                history[listener] = true;
-                                                return true;
-                                            } else {
-                                                return false;
-                                            }
+                        marks       : {
+                            getFromHTML : function (type) {
+                                var marks   = null,
+                                    _marks  = [];
+                                if (settings.regs[type] !== void 0) {
+                                    marks = privates.html.match(settings.regs[type]);
+                                    if (marks instanceof Array) {
+                                        marks = (function (marks) {
+                                            var history = {};
+                                            return marks.filter(function (mark) {
+                                                if (history[mark] === void 0) {
+                                                    history[mark] = true;
+                                                    return true;
+                                                } else {
+                                                    return false;
+                                                }
+                                            });
+                                        }(marks));
+                                        marks.forEach(function (mark, index) {
+                                            var _mark = mark.replace(new RegExp(settings.regs[type + '_OPEN'], 'gi'), '')
+                                                                    .replace(new RegExp(settings.regs[type + '_CLOSE'], 'gi'), '');
+                                            privates.html = privates.html.replace(
+                                                new RegExp(settings.regs[type + '_OPEN'] + _mark.replace(/\./gi, '\\.') + settings.regs[type + '_CLOSE'], 'gi'),
+                                                ' ' + settings.css.attrs[type + '_MARK'] + '="' + _mark + '" ');
+                                            _mark = _mark.split(',');
+                                            _mark.forEach(function (mark) {
+                                                mark = mark.replace(/\s/gi);
+                                                if (_marks.indexOf(mark) === -1) {
+                                                    _marks.push(mark);
+                                                }
+                                            });
                                         });
-                                    }(listeners));
-                                    listeners.forEach(function (listener, index) {
-                                        var _listener = listener.replace(new RegExp(settings.regs.LISTENER_OPEN,    'gi'), '')
-                                                                .replace(new RegExp(settings.regs.LISTENER_CLOSE,   'gi'), '');
-                                        privates.html = privates.html.replace(
-                                            new RegExp(settings.regs.LISTENER_OPEN + _listener.replace(/\./gi, '\\.') + settings.regs.LISTENER_CLOSE, 'gi'), 
-                                            ' ' + settings.css.attrs.LISTENER_MARK + '="' + _listener + '" ');
-                                        _listener = _listener.split(',');
-                                        _listener.forEach(function (listener) {
-                                            listener = listener.replace(/\s/gi);
-                                            if (_listeners.indexOf(listener) === -1) {
-                                                _listeners.push(listener);
-                                            }
-                                        });
-                                    });
-                                    return _listeners;
+                                    }
                                 }
+                                return _marks;
                             },
-                            getFromDOM  : function (clone) {
-                                var listeners = {};
-                                if (privates.listeners instanceof Array) {
-                                    privates.listeners.forEach(function (listener) {
-                                        listeners[listener] = _nodes('*[' + settings.css.attrs.LISTENER_MARK + '*="' + listener + '"]', false, clone);
-                                        if (listeners[listener].target !== null) {
-                                            listeners[listener] = listeners[listener].target;
+                            getFromDOM  : function (clone, type) {
+                                var marks = {};
+                                if (privates[type.toLowerCase()] instanceof Array) {
+                                    privates[type.toLowerCase()].forEach(function (mark) {
+                                        marks[mark] = _nodes('*[' + settings.css.attrs[type + '_MARK'] + '*="' + mark + '"]', false, clone);
+                                        if (marks[mark].target !== null && marks[mark].target.length > 0) {
+                                            marks[mark] = marks[mark].target;
                                         }
                                     });
-                                    _object(listeners).forEach(function (name, nodes) {
-                                        if (listeners[name] !== null) {
-                                            listeners[name] = function on(event, handle) {
-                                                Array.prototype.forEach.call(nodes, function (node, number) {
-                                                    node.__number = number;
-                                                    flex.events.DOM.add(node, event, handle);
-                                                });
-                                            };
-                                            listeners[name].target = nodes.length === 1 ? nodes[0] : nodes;
+                                    _object(marks).forEach(function (name, nodes) {
+                                        if (marks[name] !== null) {
+                                            switch (type) {
+                                                case settings.marks.DOM:
+                                                    marks[name] = nodes;
+                                                    break;
+                                            }
                                             Array.prototype.forEach.call(nodes, function (node, number) {
-                                                node.removeAttribute(settings.css.attrs.LISTENER_MARK);
+                                                node.removeAttribute(settings.css.attrs[type + '_MARK']);
                                             });
                                         }
                                     });
                                 }
-                                return listeners;
+                                return marks;
                             },
                             process     : function () {
-                                privates.listeners = convert.listeners.getFromHTML();
+                                [settings.marks.DOM].forEach(function (type) {
+                                    privates[type.toLowerCase()] = convert.marks.getFromHTML(type);
+                                });
                             }
                         },
                         process     : function () {
                             privates.pattern = compatibility.getParent(compatibility.getFirstTagFromHTML(privates.html));
                             if (privates.pattern !== null) {
-                                convert.listeners.  process();
+                                convert.marks.      process();
                                 privates.pattern.innerHTML = privates.html;
                                 convert.hooks.      process();
                                 convert.model.      process();
@@ -1045,7 +1057,7 @@
                         return {
                             clone       : clone,
                             setters     : hook_setters,
-                            listeners   : convert.listeners.getFromDOM(clone)
+                            dom         : convert.marks.getFromDOM(clone, settings.marks.DOM),
                         };
                     };
                     signature       = function () {
@@ -1072,7 +1084,7 @@
                                 html                : parameters.html,
                                 pattern             : null,
                                 hooks_html          : null,
-                                listeners           : null,
+                                dom                 : null
                             },
                             prototype       : pattern.proto
                         }).createInstanceClass();
@@ -1116,7 +1128,7 @@
                         map         = null,
                         hooks       = null,
                         model       = null,
-                        listeners   = null,
+                        dom         = null,
                         methods     = null,
                         controller  = null,
                         cloning     = null,
@@ -1199,11 +1211,11 @@
                                     var value = null;
                                     if (hooks[key] !== void 0) {
                                         if (hooks[key] instanceof settings.classes.RESULT) {
-                                            map.        current[key] = hooks[key].map();
+                                            map.        current[key]                        = hooks[key].map();
                                             model.      current.model   ['__' + key + '__'] = hooks[key].model();
                                             model.      current.binds   ['__' + key + '__'] = hooks[key].binds();
-                                            listeners.  current         ['__' + key + '__'] = hooks[key].listeners();
-                                            hooks_map[key]                              = hooks[key].hooks_map()
+                                            dom.        current         ['__' + key + '__'] = hooks[key].dom();
+                                            hooks_map[key]                                  = hooks[key].hooks_map()
                                         }
                                         hook_setter(hooks[key]);
                                     } else {
@@ -1228,9 +1240,13 @@
                         map         : {},
                         update      : function (clone) {
                             var iteration = {
-                                nodes   : Array.prototype.filter.call(clone.childNodes, function () { return true; }),
-                                childs  : map.current
+                                __context: clone.childNodes.length > 0 ? clone.childNodes[0] : null
                             };
+                            if (typeof map.current === 'object' && map.current !== null) {
+                                _object(map.current).forEach(function (name, value) {
+                                    iteration[name] = value;
+                                });
+                            }
                             if (map.map === null) {
                                 map.map = {};
                             } else if (typeof map.map === 'object' && !(map.map instanceof Array)) {
@@ -1247,6 +1263,31 @@
                         },
                         iteration   : function () {
                             map.current = {};
+                        },
+                        collapse    : function () {
+                            function convert(source) {
+                                var storage = null;
+                                if (source instanceof Array) {
+                                    storage = [];
+                                    source.forEach(function (value) {
+                                        storage.push(convert(value));
+                                    });
+                                } else {
+                                    storage = {};
+                                    if (source.__context !== void 0) {
+                                        storage.__context = instance.map.create(source.__context.parentNode);
+                                    }
+                                    _object(source).forEach(function (name, value) {
+                                        if (name !== '__context') {
+                                            if (typeof value === 'object' || value instanceof Array) {
+                                                storage[name] = convert(value);
+                                            }
+                                        }
+                                    });
+                                }
+                                return storage;
+                            };
+                            return convert(map.map);
                         }
                     };
                     model       = {
@@ -1437,34 +1478,51 @@
                             };
                         }
                     };
-                    listeners   = {
+                    dom         = {
                         current     : null,
-                        listeners   : null,
-                        update      : function (_listeners) {
-                            if (Object.keys(listeners.current).length > 0) {
-                                _object(listeners.current).forEach(function (key, value) {
-                                    _listeners[key] = value;
+                        dom         : null,
+                        update      : function (_dom) {
+                            if (Object.keys(dom.current).length > 0) {
+                                _object(dom.current).forEach(function (key, value) {
+                                    _dom[key] = value;
                                 });
                             }
-                            if (listeners.listeners === null) {
-                                listeners.listeners = {};
-                            } else if (typeof listeners.listeners === 'object' && !(listeners.listeners instanceof Array)) {
-                                listeners.listeners = [listeners.listeners];
+                            if (dom.dom === null) {
+                                dom.dom = {};
+                            } else if (typeof dom.dom === 'object' && !(dom.dom instanceof Array)) {
+                                dom.dom = [dom.dom];
                             }
-                            if (listeners.listeners instanceof Array) {
-                                listeners.listeners.push(_listeners);
+                            if (dom.dom instanceof Array) {
+                                dom.dom.push(_dom);
                             } else {
-                                listeners.listeners = _listeners;
+                                dom.dom = _dom;
                             }
                         },
                         reset       : function(){
-                            listeners.listeners = null;
+                            dom.dom = null;
                         },
                         iteration   : function () {
-                            listeners.current = {};
+                            dom.current = {};
                         },
                         collapse    : function () {
                             function process(source, storage, indexes) {
+                                function addIndexes(nodes, indexes) {
+                                    function toNodeList(nodeList, indexes) {
+                                        Array.prototype.forEach.call(nodeList, function (node, index) {
+                                            var __indexes = nodeList.length > 1 ? indexes.concat([index]) : indexes;
+                                            if (node[settings.other.INDEXES] === void 0 || node[settings.other.INDEXES].length < __indexes.length) {
+                                                node[settings.other.INDEXES] = nodeList.length > 1 ? indexes.concat([index]) : indexes;
+                                            }
+                                        });
+                                    };
+                                    if (nodes instanceof NodeList) {
+                                        toNodeList(nodes, indexes);
+                                    } else if (nodes instanceof instance.nodeList.NODE_LIST) {
+                                        nodes.collections.forEach(function (collection) {
+                                            toNodeList(collection, indexes);
+                                        });
+                                    }
+                                };
                                 function getFromArray(source, storage, indexes) {
                                     var names       = [],
                                         sub_objs    = [];
@@ -1475,15 +1533,16 @@
                                         names.forEach(function (name) {
                                             storage[name] = [];
                                             source.forEach(function (value, index) {
-                                                if (value[name] !== void 0 && typeof value[name] === 'function') {
-                                                    storage[name].push({ caller: value[name], index: (indexes === '' ? '' : indexes + ',') + index.toString() });
+                                                if (value[name] instanceof NodeList || value[name] instanceof instance.nodeList.NODE_LIST) {
+                                                    storage[name].push(value[name]);
+                                                    addIndexes(value[name], indexes.concat([index]));
                                                 } else if (value[name] instanceof Array) {
                                                     storage[name].push({});
-                                                    getFromArray(value[name], storage[name][storage[name].length - 1], (indexes === '' ? '' : indexes + ',') + index.toString())
+                                                    getFromArray(value[name], storage[name][storage[name].length - 1], indexes.concat([index]));
                                                     if (sub_objs.indexOf(name) === -1) {
                                                         sub_objs.push(name);
                                                     }
-                                                } else if (typeof value[name] === 'object' && value[name] !== null) {
+                                                } else if (typeof value[name] === 'object' && value[name] !== null && !(value[name] instanceof instance.nodeList.NODE_LIST)) {
                                                     storage[name].push(value[name]);
                                                     if (sub_objs.indexOf(name) === -1) {
                                                         sub_objs.push(name);
@@ -1497,31 +1556,12 @@
                                             getFromArray(source, storage[name], indexes);
                                         });
                                         _object(storage).forEach(function (name, value) {
-                                            var handles = [];
+                                            var collection = instance.nodeList.create();
                                             if (value instanceof Array) {
-                                                handles = value.map(function (value) {
-                                                    var indexes = value.index.split(',').map(function (index) { return index !== '' ? parseInt(index, 10) : -1; }),
-                                                        _handle = value.caller,
-                                                        _target = value.caller.target;
-                                                    if (value.caller.indexed !== void 0) {
-                                                        return function on(event, handle) {
-                                                            _handle(event, handle);
-                                                        };
-                                                    } else {
-                                                        return function on(event, handle) {
-                                                            _handle(event, handle.bind({ indexes: indexes, target: _target }));
-                                                        };
-                                                    }
-                                                    return function on(event, handle) {
-                                                        _handle(event, handle.bind({ indexes: indexes, target: _target }));
-                                                    };
+                                                value.forEach(function (nodeList) {
+                                                    collection.add(nodeList);
                                                 });
-                                                storage[name] = function on(event, handle) {
-                                                    handles.forEach(function (_handle) {
-                                                        _handle(event, handle);
-                                                    });
-                                                };
-                                                storage[name].indexed = true;
+                                                storage[name] = collection;
                                             }
                                         });
                                         return storage[name];
@@ -1531,25 +1571,39 @@
                                     if (value instanceof Array) {
                                         storage[name] = {};
                                         getFromArray(value, storage[name], indexes);
-                                    } else if (typeof value === 'function') {
-                                        storage[name] = function on(event, handle) {
-                                            value(event, handle.bind({
-                                                indexes: indexes.split(',').map(function (index) { return index !== '' ? parseInt(index, 10) : -1; }), target: value.target
-                                            }));
-                                        };
-                                    } else if (typeof value === 'object' && typeof value !== 'function') {
+                                    } else if (value instanceof NodeList) {
+                                        addIndexes(value, indexes);
+                                        storage[name] = instance.nodeList.create(value);
+                                    } else if (typeof value === 'object') {
                                         storage[name] = {};
                                         process(value, storage[name], indexes);
                                     }
                                 });
                             };
-                            var _listeners = {};
-                            if (listeners.listeners !== null) {
-                                process(listeners.listeners, _listeners, '');
+                            function wrap(source) {
+                                var result = null;
+                                if (source instanceof Array) {
+                                    result = [];
+                                    source.forEach(function (item) {
+                                        result.push(wrap(item));
+                                    });
+                                } else if (source instanceof NodeList) {
+                                    result = instance.nodeList.create(source);
+                                } else if (typeof source === 'object' && source !== null && !(source instanceof instance.nodeList.NODE_LIST)) {
+                                    result = {};
+                                    _object(source).forEach(function (name, value) {
+                                        result[name] = wrap(value);
+                                    });
+                                }
+                                return result;
+                            };
+                            var _dom = {};
+                            if (dom.dom !== null) {
+                                process(dom.dom, _dom, []);
                             }
                             return {
-                                listed  : listeners.listeners,
-                                grouped : _listeners
+                                listed  : wrap(dom.dom),
+                                grouped: _dom
                             };
                         }
                     };
@@ -1585,20 +1639,20 @@
                             if (_hooks !== null) {
                                 map.        reset();
                                 model.      reset();
-                                listeners.  reset();
-                                _hooks      = hooks.build(_hooks);
+                                dom.        reset();
+                                _hooks = hooks.build(_hooks);
                                 hooks_map   = cloning.update(_hooks);
                                 _hooks      = _hooks instanceof Array ? _hooks : [_hooks];
                                 _hooks.forEach(function (_hooks) {
                                     clone = privates.pattern(conditions.get(_hooks, _conditions));
                                     map.        iteration();
                                     model.      iteration();
-                                    listeners.  iteration();
+                                    dom.        iteration();
                                     hooks.      apply(_hooks, clone.setters, hooks_map);
                                     map.        update(clone.clone);
                                     model.      update(clone.clone);
                                     model.      clear(clone.clone);
-                                    listeners.  update(clone.listeners);
+                                    dom.        update(clone.dom);
                                     nodes = nodes.concat(Array.prototype.filter.call(clone.clone.childNodes, function () { return true; }));
                                 });
                             }
@@ -1608,7 +1662,7 @@
                                 map         : map.map,
                                 model       : model.model,
                                 binds       : model.binds,
-                                listeners   : listeners.listeners,
+                                dom         : dom.dom,
                                 hooks_map   : hooks_map,
                                 instance    : privates.__instance,
                                 handle      : function (handle, _resources) { return methods.handle(handle, _instance, _resources); }
@@ -1621,8 +1675,8 @@
                                 handle.call(_instance, {
                                     model       : model.model,
                                     binds       : model.binds,
-                                    map         : map.map,
-                                    listeners   : listeners.collapse(),
+                                    map         : map.collapse(),
+                                    dom         : dom.collapse(),
                                     resources   : _resources,
                                 });
                             }
@@ -1690,6 +1744,181 @@
                     }
                     return _instance;
                 },
+                nodeList: {
+                    NODE_LIST   : function(nodeList){
+                        if (nodeList instanceof NodeList) {
+                            this.collections = [nodeList];
+                        } else if (helpers.isNode(nodeList)) {
+                            this.collections = [[nodeList]];
+                        } else {
+                            this.collections = [];
+                        }
+                    },
+                    init        : function () {
+                        instance.nodeList.NODE_LIST.prototype = {
+                            add         : function (nodeList) {
+                                if (nodeList instanceof NodeList) {
+                                    this.collections.push(nodeList);
+                                } else if (nodeList instanceof instance.nodeList.NODE_LIST) {
+                                    this.collections = this.collections.concat(nodeList.collections);
+                                } else if (helpers.isNode(nodeList)) {
+                                    this.collections.push([nodeList]);
+                                }
+                            },
+                            css         : function (css) {
+                                var self = this;
+                                if (typeof css === 'object' && css !== null) {
+                                    _object(css).forEach(function (name, value) {
+                                        self.collections.forEach(function (nodeList) {
+                                            Array.prototype.forEach.call(nodeList, function (node) {
+                                                if (node.style[name] !== void 0) {
+                                                    node.style[name] = value;
+                                                }
+                                            });
+                                        });
+                                    });
+                                }
+                            },
+                            addClass    : function (className){
+                                this.collections.forEach(function (nodeList) {
+                                    Array.prototype.forEach.call(nodeList, function (node) {
+                                        var classes = node.className.replace(/\s{2,}/gi, '').split(' ');
+                                        if (classes.indexOf(className) === -1) {
+                                            classes.push(className);
+                                            node.className = classes.join(' ');
+                                        }
+                                    });
+                                });
+                            },
+                            removeClass : function (className){
+                                this.collections.forEach(function (nodeList) {
+                                    Array.prototype.forEach.call(nodeList, function (node) {
+                                        var classes = node.className.replace(/\s{2,}/gi, '').split(' '),
+                                            index   = classes.indexOf(className);
+                                        if (index !== -1) {
+                                            classes.splice(index, 1);
+                                            node.className = classes.join(' ');
+                                        }
+                                    });
+                                });
+                            },
+                            show        : function () {
+                                this.collections.forEach(function (nodeList) {
+                                    Array.prototype.forEach.call(nodeList, function (node) {
+                                        node.style.display = node.__display !== void 0 ? node.__display : 'block';
+                                    });
+                                });
+                            },
+                            hide        : function () {
+                                this.collections.forEach(function (nodeList) {
+                                    Array.prototype.forEach.call(nodeList, function (node) {
+                                        node.__display      = node.style.display;
+                                        node.style.display  = 'none';
+                                    });
+                                });
+                            },
+                            remove      : function (){
+                                this.collections.forEach(function (nodeList) {
+                                    Array.prototype.forEach.call(nodeList, function (node) {
+                                        if (node.parentNode !== void 0 && node.parentNode !== null) {
+                                            node.parentNode.removeChild(node);
+                                        }
+                                    });
+                                });
+                                this.collections = [];
+                            },
+                            append      : function (parent){
+                                if (parent.appendChild !== void 0) {
+                                    this.collections.forEach(function (nodeList) {
+                                        Array.prototype.forEach.call(nodeList, function (node) {
+                                            parent.appendChild(node);
+                                        });
+                                    });
+                                }
+                            },
+                            insertBefore: function (parent, before) {
+                                if (parent.appendChild !== void 0 && before.nodeType !== void 0) {
+                                    this.collections.forEach(function (nodeList) {
+                                        Array.prototype.forEach.call(nodeList, function (node) {
+                                            parent.insertBefore(node, before);
+                                        });
+                                    });
+                                }
+                            },
+                            attr        : function (name, value){
+                                var result = [];
+                                this.collections.forEach(function (nodeList) {
+                                    Array.prototype.forEach.call(nodeList, function (node) {
+                                        if (value !== void 0) {
+                                            node.setAttribute(name, value);
+                                            result.push(true);
+                                        } else {
+                                            result.push(node.getAttribute(name));
+                                        }
+                                    });
+                                });
+                                return result.length === 1 ? result[0] : result;
+                            },
+                            removeAttr  : function (name) {
+                                var result = [];
+                                this.collections.forEach(function (nodeList) {
+                                    Array.prototype.forEach.call(nodeList, function (node) {
+                                        result.push(node.removeAttribute(name));
+                                    });
+                                });
+                                return result.length === 1 ? result[0] : result;
+                            },
+                            on          : function (event, handle){
+                                if (typeof handle === 'function') {
+                                    this.collections.forEach(function (nodeList) {
+                                        Array.prototype.forEach.call(nodeList, function (node) {
+                                            var target = instance.nodeList.create(node);
+                                            target.indexes = node[settings.other.INDEXES];
+                                            flex.events.DOM.add(node, event, handle.bind(target));
+                                        });
+                                    });
+                                } else {
+                                    throw Error('Defined [handle] is not a function');
+                                }
+                            },
+                            getAsArray  : function () {
+                                var result = [];
+                                this.collections.forEach(function (nodeList) {
+                                    Array.prototype.forEach.call(nodeList, function (node) {
+                                        result.push(node);
+                                    });
+                                });
+                            }
+                        };
+                    },
+                    create      : function (nodeList) {
+                        return new instance.nodeList.NODE_LIST(nodeList);
+                    }
+                },
+                map     : {
+                    MAP: function (context) {
+                        if (context !== void 0 && context.nodeType !== void 0) {
+                            this.context = context;
+                        } else {
+                            throw Error('Context [context] should be a node.');
+                        }
+                    },
+                    init: function () {
+                        instance.map.MAP.prototype = {
+                            select: function (selector) {
+                                var results = _nodes(selector, false, this.context);
+                                if (results.target !== null && results.target.length > 0) {
+                                    return results.target.length > 1 ? results.target : results.target[0];
+                                } else {
+                                    return null;
+                                }
+                            }
+                        };
+                    },
+                    create: function (context) {
+                        return new instance.map.MAP(context);
+                    }
+                }
             };
             //END: instance class ===============================================
             //BEGIN: result class ===============================================
@@ -1721,7 +1950,7 @@
                         nodes       : function () { return privates.nodes;      },
                         map         : function () { return privates.map;        },
                         model       : function () { return privates.model;      },
-                        listeners   : function () { return privates.listeners;  },
+                        dom         : function () { return privates.dom;        },
                         binds       : function () { return privates.binds;      },
                         handle      : function () { return privates.handle;     },
                         hooks_map   : function () { return privates.hooks_map;  },
@@ -1733,7 +1962,7 @@
                         nodes       : returning.nodes,
                         mount       : returning.mount,
                         map         : returning.map,
-                        listeners   : returning.listeners,
+                        dom         : returning.dom,
                         model       : returning.model,
                         binds       : returning.binds,
                         hooks_map   : returning.hooks_map,
@@ -1750,7 +1979,7 @@
                                                                 { name: 'instance',     type: 'object',             value: null     },
                                                                 { name: 'map',          type: ['object', 'array'],  value: null     },
                                                                 { name: 'model',        type: ['object', 'array'],  value: null     },
-                                                                { name: 'listeners',    type: ['object', 'array'],  value: null     },
+                                                                { name: 'dom',          type: ['object', 'array'],  value: null     },
                                                                 { name: 'binds',        type: ['object', 'array'],  value: null     }]) !== false) {
                         return _object({
                             parent      : settings.classes.RESULT,
@@ -1762,7 +1991,7 @@
                                 map         : parameters.map,
                                 model       : parameters.model,
                                 binds       : parameters.binds,
-                                listeners   : parameters.listeners,
+                                dom         : parameters.dom,
                                 handle      : parameters.handle,
                                 hooks_map   : parameters.hooks_map,
                                 instance    : parameters.instance,
@@ -2147,11 +2376,30 @@
                     }
                 },
                 isNode  : function (something) {
-                    if (something.nodeName !== void 0 && something.parentNode !== void 0 && something.nodeType !== void 0) {
+                    if (something !== void 0 && something.nodeName !== void 0 && something.parentNode !== void 0 && something.nodeType !== void 0) {
                         return true;
                     } else {
                         return false;
                     }
+                },
+                tableFix: function (html) {
+                    var tables  = html.match(settings.regs.TABLE),
+                        hooks   = [];
+                    if (tables instanceof Array) {
+                        tables.forEach(function (table) {
+                            var _hooks  = null;
+                            table       = table.replace(settings.regs.TABLE_TAG, '').replace(settings.regs.ANY_TAG, '');
+                            _hooks      = table.match(settings.regs.HOOK);
+                            if (_hooks instanceof Array) {
+                                hooks = hooks.concat(_hooks);
+                            }
+                        });
+                        hooks.forEach(function (hook) {
+                            var _hook = hook.replace(settings.regs.HOOK_BORDERS, '');
+                            html = html.replace(new RegExp(settings.regs.HOOK_OPEN + _hook + settings.regs.HOOK_CLOSE, 'gi'), '<!--' + hook + '-->');
+                        });
+                    }
+                    return html;
                 }
             };
             callers     = {
@@ -2174,6 +2422,9 @@
                     });
                 }
             };
+            //Init addition classes
+            instance.nodeList.init();
+            instance.map.init();
             //Init modules
             flex.libraries.events.create();
             flex.libraries.binds.create();

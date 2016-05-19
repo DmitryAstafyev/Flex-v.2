@@ -16,7 +16,7 @@
                         { url: '/program/body.css'  },
                         { url: '/app/short.js'      },
                     ],
-                    ASYNCHRONOUS    : [
+                    ASYNCHRONOUS: [
                         {
                             resources: [
                                 { url: 'http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js' },
