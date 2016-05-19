@@ -1828,7 +1828,7 @@
                                 this.collections = [];
                             },
                             append      : function (parent){
-                                if (parent.appendChild !== void 0) {
+                                if (typeof parent.appendChild === 'function') {
                                     this.collections.forEach(function (nodeList) {
                                         Array.prototype.forEach.call(nodeList, function (node) {
                                             parent.appendChild(node);
@@ -1837,7 +1837,7 @@
                                 }
                             },
                             insertBefore: function (parent, before) {
-                                if (parent.appendChild !== void 0 && before.nodeType !== void 0) {
+                                if (typeof parent.insertBefore === 'function' && helpers.isNode(before)) {
                                     this.collections.forEach(function (nodeList) {
                                         Array.prototype.forEach.call(nodeList, function (node) {
                                             parent.insertBefore(node, before);
@@ -1893,6 +1893,14 @@
                     },
                     create      : function (nodeList) {
                         return new instance.nodeList.NODE_LIST(nodeList);
+                    },
+                    addMethod   : function (name, method) {
+                        if (typeof name === 'string' && typeof method === 'function') {
+                            if (instance.nodeList.NODE_LIST.prototype[name] !== void 0) {
+                                flex.logs.log('Method [' + name + '] of NODE_LIST list class was overwritten.', flex.logs.types.NOTIFICATION);
+                            }
+                            instance.nodeList.NODE_LIST.prototype[name] = method;
+                        }
                     }
                 },
                 map     : {
@@ -2434,6 +2442,11 @@
                 get         : caller.instance,
                 controller  : {
                     attach  : controllers.attach
+                },
+                classes     : {
+                    NODE_LIST: {
+                        addMethod : instance.nodeList.addMethod
+                    }
                 }
             };
             //Global callers
@@ -2442,7 +2455,12 @@
             //Public part
             return {
                 preload : privates.preload,
-                get     : privates.get
+                get     : privates.get,
+                classes : {
+                    NODE_LIST: {
+                        addMethod: privates.classes.NODE_LIST.addMethod
+                    }
+                }
             };
         };
         flex.modules.attach({
