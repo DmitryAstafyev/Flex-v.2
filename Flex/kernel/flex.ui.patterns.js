@@ -33,7 +33,7 @@
                 logs        = null,
                 measuring   = null,
                 helpers     = null,
-                methods     = null,
+                conditions  = null,
                 callers     = null;
             //Settings
             settings    = {
@@ -81,8 +81,7 @@
                     GROUP_PROPERTY      : /__\w*?__/gi,
                     FIRST_WORD          : /^\w+/gi,
                     NOT_WORDS_NUMBERS   : /[^\w\d]/gi,
-                    CONDITION_OPEN      : 'CON:',
-                    CONDITION_CLOSE     : ':CON',
+                    CONDITION_STRUCTURE : /^\w*=/gi
                 },
                 marks           : {
                     DOM         : 'DOM',
@@ -97,6 +96,7 @@
                     NODE_BINDING_DATA       : 'FLEX_PATTERNS_BINDINGS_DATA',
                     CONTROLLERS_LINKS       : 'FLEX_PATTERNS_CONTROLLERS_LINKS',
                     CONTROLLERS_STORAGE     : 'FLEX_PATTERNS_CONTROLLERS_STORAGE',
+                    CONDITIONS_STORAGE      : 'FLEX_PATTERNS_CONDITIONS_STORAGE',
                     PATTERN_SOURCES         : 'FLEX_PATTERNS_PATTERN_SOURCES',
                     PATTERNS                : 'FLEX_PATTERNS_PATTERNS',
                 },
@@ -155,6 +155,7 @@
                     CANNOT_FIND_CONDITION_END           : '1007:CANNOT_FIND_CONDITION_END',
                     CANNOT_FIND_CONDITION_NODES         : '1008:CANNOT_FIND_CONDITION_NODES',
                     CANNOT_FIND_CONDITION_VALUE         : '1009:CANNOT_FIND_CONDITION_VALUE',
+                    UNEXCEPTED_ERROR_CONDITION_PARSER   : '1010:UNEXCEPTED_ERROR_CONDITION_PARSER',
                 },
                 instance : {
                     BAD_HOOK_FOR_CLONE      : '2000:BAD_HOOK_FOR_CLONE',
@@ -830,15 +831,12 @@
                         },
                         conditions  : {
                             getName : function (str){
-                                var condition = str.replace(settings.regs.CONDITION_OPEN, '');
-                                if (condition.indexOf(settings.regs.CONDITION_OPEN) === -1) {
-                                    condition = condition.split('=');
-                                    if (condition.length === 2) {
-                                        return {
-                                            name    : condition[0],
-                                            value   : condition[1]
-                                        };
-                                    }
+                                var condition = str.split('=');
+                                if (condition.length === 2) {
+                                    return {
+                                        name    : condition[0],
+                                        value   : condition[1]
+                                    };
                                 }
                                 flex.logs.log(signature() + logs.pattern.WRONG_CONDITION_DEFINITION + ' (original comment: ' + str + ')', flex.logs.types.CRITICAL);
                                 throw logs.pattern.WRONG_CONDITION_DEFINITION;
@@ -849,7 +847,7 @@
                                 try {
                                     Array.prototype.forEach.call(parent.childNodes, function (child) {
                                         if (inside_condition) {
-                                            if (child.nodeType === 8 && child.nodeValue.indexOf(condition_name + settings.regs.CONDITION_CLOSE) !== -1) {
+                                            if (child.nodeType === 8 && child.nodeValue === condition_name) {
                                                 inside_condition = null;
                                                 throw 'closed';
                                             } else {
@@ -860,7 +858,10 @@
                                         }
                                     });
                                 } catch (e) {
-
+                                    if (e !== 'closed') {
+                                        flex.logs.log(signature() + logs.pattern.UNEXCEPTED_ERROR_CONDITION_PARSER + ' (condition name: ' + condition_name + ')', flex.logs.types.CRITICAL);
+                                        throw logs.pattern.UNEXCEPTED_ERROR_CONDITION_PARSER;
+                                    }
                                 }
                                 if (inside_condition === false) {
                                     flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_BEGINING + ' (condition name: ' + condition_name + ')', flex.logs.types.CRITICAL);
@@ -878,13 +879,14 @@
                                         Array.prototype.forEach.call(node.childNodes, function (node) {
                                             var condition = null;
                                             if (node.nodeType === 8) {
-                                                if (node.nodeValue.indexOf(settings.regs.CONDITION_OPEN) === 0) {
+                                                if (helpers.testReg(settings.regs.CONDITION_STRUCTURE, node.nodeValue)) {
                                                     condition = convert.conditions.getName(node.nodeValue);
                                                     if (conditions[condition.name] === void 0) {
                                                         conditions[condition.name] = [];
                                                     }
                                                     conditions[condition.name].push({
                                                         value   : condition.value,
+                                                        comment : node,
                                                         nodes   : convert.conditions.getNodes(condition.name, node, node.parentNode)
                                                     });
                                                 }
@@ -894,23 +896,124 @@
                                         });
                                     }
                                 };
-                                var conditions = {};
+                                function setupAppendMethod(conditions) {
+                                    function add(comment) {
+                                        if (_comments.indexOf(comment) === -1) {
+                                            _comments.push(comment);
+                                        }
+                                    };
+                                    function getAppend(node) {
+                                        var _node   = node,
+                                            result  = null,
+                                            next    = null,
+                                            in_con  = convert.conditions.getName(node.nodeValue).name;
+                                        add(node);
+                                        do {
+                                            next = node.nextSibling !== void 0 ? node.nextSibling : null;
+                                            if (next !== null) {
+                                                if (next.nodeType === 8 && helpers.testReg(settings.regs.CONDITION_STRUCTURE, next.nodeValue)) {
+                                                    in_con  = convert.conditions.getName(next.nodeValue).name;
+                                                    node    = next;
+                                                    add(next);
+                                                } else if (in_con !== false && next.nodeType === 8 && next.nodeValue === in_con) {
+                                                    in_con  = false;
+                                                    node    = next;
+                                                    add(next);
+                                                } else if (!in_con && next.nodeType !== 8) {
+                                                    if (next.nodeType === 3 && next.nodeValue.replace(/\s|\r|\n|\t/gi, '') === ''){
+                                                        node = next;
+                                                    } else {
+                                                        _node   = node;
+                                                        result  = function append(node) {
+                                                            if (_node.parentNode !== null) {
+                                                                if (_node.nextSibling !== null){
+                                                                    _node.parentNode.insertBefore(node, _node.nextSibling);
+                                                                } else {
+                                                                    _node.parentNode.appendChild(node);
+                                                                }
+                                                                return true;
+                                                            } else {
+                                                                return false;
+                                                            }
+                                                        };
+                                                    }
+                                                } else {
+                                                    node = next;
+                                                }
+                                            } else {
+                                                _node   = _node.parentNode;
+                                                result  = function append(node) {
+                                                    _node.appendChild(node);
+                                                    return true;
+                                                };
+                                            }
+                                            
+                                        } while (result === null);
+                                        return result;
+                                    };
+                                    var _comments = [];
+                                    _object(conditions).forEach(function (con_name, con_value) {
+                                        if (con_value instanceof Array) {
+                                            con_value.forEach(function (value, index) {
+                                                conditions[con_name][index].append = getAppend(value.comment);
+                                            });
+                                        }
+                                    });
+                                    return _comments;
+                                };
+                                function removeComments(conditions, comments) {
+                                    _object(conditions).forEach(function (con_name, con_value) {
+                                        if (con_value instanceof Array) {
+                                            con_value.forEach(function (value, index) {
+                                                value.nodes.forEach(function (node) {
+                                                    value.append(node);
+                                                });
+                                                conditions[con_name][index].comment = null;
+                                                delete conditions[con_name][index].comment;
+                                            });
+                                        }
+                                    });
+                                    comments.forEach(function (comment) {
+                                        if (comment.parentNode !== null) {
+                                            comment.parentNode.removeChild(comment);
+                                        }
+                                    });
+                                };
+                                var conditions  = {},
+                                    _comments   = null;
                                 search(node, conditions);
+                                _comments = setupAppendMethod(conditions);
+                                removeComments(conditions, _comments);
                                 return conditions;
                             },
                             process : function (clone, _conditions) {
-                                var conditions = convert.conditions.find(clone);
+                                var conditions      = convert.conditions.find(clone),
+                                    conditions_dom  = {};
                                 _object(_conditions).forEach(function (con_name, con_value) {
                                     var found_flag = false;
                                     if (conditions[con_name] !== void 0) {
+                                        conditions_dom[con_name] = {};
                                         conditions[con_name].forEach(function (condition) {
-                                            if (condition.value !== con_value) {
-                                                condition.nodes.forEach(function (node) {
-                                                    node.parentNode.removeChild(node);
+                                            conditions_dom[con_name][condition.value] = conditions_dom[con_name][condition.value] === void 0 ? [] : conditions_dom[con_name][condition.value];
+                                            condition.nodes.forEach(function (node) {
+                                                conditions_dom[con_name][condition.value].push({
+                                                    append: function append() {
+                                                        return condition.append(node);
+                                                    },
+                                                    remove: function remove() {
+                                                        if (node.parentNode !== null) {
+                                                            return node.parentNode.removeChild(node);
+                                                        } else {
+                                                            return false;
+                                                        }
+                                                    },
                                                 });
-                                            } else {
-                                                found_flag = true;
-                                            }
+                                                if (condition.value !== con_value) {
+                                                    node.parentNode.removeChild(node);
+                                                } else {
+                                                    found_flag = true;
+                                                }
+                                            });
                                         });
                                         if (!found_flag) {
                                             flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_VALUE + ' (condition name: ' + con_name + ' = "' + con_value + '")', flex.logs.types.WARNING);
@@ -919,6 +1022,7 @@
                                         flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_NODES + ' (condition name: ' + con_name + ')', flex.logs.types.WARNING);
                                     }
                                 });
+                                return Object.keys(conditions_dom).length > 0 ? conditions_dom : null;
                             }
                         },
                         marks       : {
@@ -1039,9 +1143,6 @@
                         var hook_setters    = {},
                             clone           = privates.pattern.cloneNode(true),
                             conditions      = null;
-                        if (condition_values !== void 0 && condition_values !== null) {
-                            convert.conditions.process(clone, condition_values);
-                        }
                         privates.hooks_html.forEach(function (hook) {
                             var _hooks = [];
                             convert.hooks.setters.inAttributes  (clone, hook, _hooks);
@@ -1055,9 +1156,16 @@
                             }(_hooks));
                         });
                         return {
-                            clone       : clone,
-                            setters     : hook_setters,
-                            dom         : convert.marks.getFromDOM(clone, settings.marks.DOM),
+                            clone           : clone,
+                            setters         : hook_setters,
+                            dom             : convert.marks.getFromDOM(clone, settings.marks.DOM),
+                            applyConditions : function(){
+                                var conditions_dom  = null;
+                                if (condition_values !== void 0 && condition_values !== null) {
+                                    conditions_dom = convert.conditions.process(clone, condition_values);
+                                }
+                                return conditions_dom;
+                            }
                         };
                     };
                     signature       = function () {
@@ -1132,10 +1240,10 @@
                         methods     = null,
                         controller  = null,
                         cloning     = null,
-                        conditions  = null,
+                        condition   = null,
                         returning   = null;
                     cloning     = {
-                        update          : function (_hooks) {
+                        update          : function (_hooks, conditions) {
                             var _hooks  = _hooks instanceof Array ? _hooks[0] : _hooks,
                                 map     = {};
                             _object(_hooks).forEach(function (hook_name, hook_value) {
@@ -1144,6 +1252,7 @@
                                 } else {
                                     map[hook_name] = true;
                                 }
+                                map['__conditions__'] = conditions;
                             });
                             return map;
                         },
@@ -1158,8 +1267,9 @@
                                             item[hook_name] = hook_value;
                                         } else if (typeof hooks_map[hook_name] === 'object' && hooks_map['__' + hook_name + '__'] !== void 0 && typeof hook_value === 'object' && hook_value !== null) {
                                             item[hook_name] = caller.instance({
-                                                url     : hooks_map['__' + hook_name + '__'],
-                                                hooks   : cloning.convertHooks(hooks_map[hook_name], hook_value)
+                                                url         : hooks_map['__' + hook_name + '__'],
+                                                conditions  : hooks_map[hook_name]['__conditions__'],
+                                                hooks       : cloning.convertHooks(hooks_map[hook_name], hook_value)
                                             });
                                         } else {
                                             flex.logs.log(logs.instance.NO_URL_FOR_CLONE_HOOK + '(' + self.url + ')', flex.logs.types.WARNING);
@@ -1467,7 +1577,7 @@
                                 });
                             }
                         },
-                        reset       : function(){
+                        reset       : function (){
                             model.model = null;
                             model.binds = null;
                         },
@@ -1476,6 +1586,13 @@
                                 model: {},
                                 binds: {}
                             };
+                        },
+                        getLast     : function () {
+                            var last = {
+                                model : model.model instanceof Array ? model.model[model.model.length - 1] : model.model,
+                                binds : model.binds instanceof Array ? model.binds[model.binds.length - 1] : model.binds
+                            };
+                            return last;
                         }
                     };
                     dom         = {
@@ -1607,8 +1724,8 @@
                             };
                         }
                     };
-                    conditions  = {
-                        get: function (_hooks, _conditions) {
+                    condition   = {
+                        get         : function (_hooks, _conditions) {
                             var result = {};
                             if (_conditions !== null) {
                                 _object(_conditions).forEach(function (name, handle) {
@@ -1616,35 +1733,111 @@
                                 });
                             }
                             return Object.keys(result).length > 0 ? result : null;
+                        },
+                        setDefault  : function (_conditions) {
+                            var defaults = conditions.storage.get(self.url);
+                            if (typeof defaults === 'object' && defaults !== null) {
+                                if (typeof _conditions !== 'object' || _conditions === null) {
+                                    _conditions = {};
+                                }
+                                _object(defaults).forEach(function (name, value) {
+                                    if (_conditions[name] === void 0) {
+                                        _conditions[name] = value;
+                                    }
+                                });
+                                _conditions = Object.keys(_conditions).length > 0 ? _conditions : null;
+                            }
+                            return _conditions;
+                        },
+                        tracking    : function (_conditions, conditions_dom, _hooks){
+                            if (typeof _conditions === 'object' && _conditions !== null) {
+                                _object(_conditions).forEach(function (con_name, con_value) {
+                                    if (typeof con_value === 'function') {
+                                        if (con_value.tracking !== void 0 && conditions_dom[con_name] !== void 0) {
+                                            con_value.tracking = con_value.tracking instanceof Array ? con_value.tracking : [con_value.tracking];
+                                            con_value.tracking.forEach(function (tracked) {
+                                                var data    = {},
+                                                    _model  = model.getLast();
+                                                if (_model.binds[tracked] !== void 0) {
+                                                    if (typeof _model.binds[tracked].addHandle === 'function') {
+                                                        _object(_hooks).forEach(function (hook_name, hook_value) {
+                                                            if (_model.model[hook_name] !== void 0) {
+                                                                data[hook_name] = function getModelValue() { return _model.model[hook_name]; };
+                                                            } else {
+                                                                data[hook_name] = hook_value;
+                                                            }
+                                                        });
+                                                        (function (_condition, _data, conditions_dom) {
+                                                            _model.binds[tracked].addHandle(function () {
+                                                                var data    = {},
+                                                                    result  = null;
+                                                                _object(_data).forEach(function (data_name, data_value) {
+                                                                    data[data_name] = typeof data_value === 'function' ? data_value() : data_value;
+                                                                });
+                                                                result = _condition(data);
+                                                                if (conditions_dom[result] !== void 0) {
+                                                                    _object(conditions_dom).forEach(function (res, nodes) {
+                                                                        nodes.forEach(function (node) {
+                                                                            if (res === result) {
+                                                                                node.append();
+                                                                            } else {
+                                                                                node.remove();
+                                                                            }
+                                                                        });
+                                                                    });
+                                                                }
+                                                            });
+                                                        }(con_value, data, conditions_dom[con_name]));
+                                                    }
+                                                }
+                                            });
+                                        } else {
+                                            var result = con_value(_hooks);
+                                            if (conditions_dom[con_name] !== void 0) {
+                                                _object(conditions_dom[con_name]).forEach(function (res, nodes) {
+                                                    nodes.forEach(function (node) {
+                                                        if (res !== result) {
+                                                            conditions_dom[con_name][res] = null;
+                                                            delete conditions_dom[con_name][res];
+                                                        }
+                                                    });
+                                                });
+                                            }
+                                        }
+                                    }
+                                });
+                            }
                         }
                     };
                     controller  = {
-                        apply: function (_instance, _resources) {
+                        apply       : function (_instance, _resources) {
                             var _controllers = controllers.storage.get(self.url);
                             if (_controllers !== null) {
                                 _controllers.forEach(function (controller) {
                                     methods.handle(controller, _instance, _resources);
                                 });
                             }
-                        }
+                        },
                     };
                     methods     = {
                         build       : function (_hooks, _resources, _conditions) {
-                            var nodes       = [],
-                                _map        = [],
-                                _binds      = [],
-                                clone       = null,
-                                hooks_map   = null,
-                                _instance   = null;
+                            var nodes           = [],
+                                _map            = [],
+                                _binds          = [],
+                                clone           = null,
+                                hooks_map       = null,
+                                _instance       = null,
+                                _conditions     = condition.setDefault(_conditions);
                             if (_hooks !== null) {
                                 map.        reset();
                                 model.      reset();
                                 dom.        reset();
-                                _hooks = hooks.build(_hooks);
-                                hooks_map   = cloning.update(_hooks);
+                                _hooks      = hooks.build(_hooks);
+                                hooks_map   = cloning.update(_hooks, _conditions);
                                 _hooks      = _hooks instanceof Array ? _hooks : [_hooks];
                                 _hooks.forEach(function (_hooks) {
-                                    clone = privates.pattern(conditions.get(_hooks, _conditions));
+                                    var conditions_dom = null;
+                                    clone           = privates.pattern(condition.get(_hooks, _conditions), _conditions);
                                     map.        iteration();
                                     model.      iteration();
                                     dom.        iteration();
@@ -1653,19 +1846,21 @@
                                     model.      update(clone.clone);
                                     model.      clear(clone.clone);
                                     dom.        update(clone.dom);
-                                    nodes = nodes.concat(Array.prototype.filter.call(clone.clone.childNodes, function () { return true; }));
+                                    nodes           = nodes.concat(Array.prototype.filter.call(clone.clone.childNodes, function () { return true; }));
+                                    conditions_dom  = clone.applyConditions();
+                                    condition.tracking(_conditions, conditions_dom, _hooks);
                                 });
                             }
                             _instance = result.instance({
-                                url         : self.url,
-                                nodes       : nodes,
-                                map         : map.map,
-                                model       : model.model,
-                                binds       : model.binds,
-                                dom         : dom.dom,
-                                hooks_map   : hooks_map,
-                                instance    : privates.__instance,
-                                handle      : function (handle, _resources) { return methods.handle(handle, _instance, _resources); }
+                                url             : self.url,
+                                nodes           : nodes,
+                                map             : map.map,
+                                model           : model.model,
+                                binds           : model.binds,
+                                dom             : dom.dom,
+                                hooks_map       : hooks_map,
+                                instance        : privates.__instance,
+                                handle          : function (handle, _resources) { return methods.handle(handle, _instance, _resources); }
                             });
                             controller.apply(_instance, _resources);
                             return _instance;
@@ -1955,16 +2150,16 @@
                         }
                     };
                     returning   = {
-                        nodes       : function () { return privates.nodes;      },
-                        map         : function () { return privates.map;        },
-                        model       : function () { return privates.model;      },
-                        dom         : function () { return privates.dom;        },
-                        binds       : function () { return privates.binds;      },
-                        handle      : function () { return privates.handle;     },
-                        hooks_map   : function () { return privates.hooks_map;  },
-                        instance    : function () { return privates.instance;   },
-                        clone       : clone,
-                        mount       : mount
+                        nodes           : function () { return privates.nodes;          },
+                        map             : function () { return privates.map;            },
+                        model           : function () { return privates.model;          },
+                        dom             : function () { return privates.dom;            },
+                        binds           : function () { return privates.binds;          },
+                        handle          : function () { return privates.handle;         },
+                        hooks_map       : function () { return privates.hooks_map;      },
+                        instance        : function () { return privates.instance;       },
+                        clone           : clone,
+                        mount           : mount
                     };
                     return {
                         nodes       : returning.nodes,
@@ -1980,29 +2175,29 @@
                     };
                 },
                 instance    : function (parameters) {
-                    if (flex.oop.objects.validate(parameters, [ { name: 'url',          type: 'string'                              },
-                                                                { name: 'nodes',        type: 'array'                               },
-                                                                { name: 'handle',       type: 'function'                            },
-                                                                { name: 'hooks_map',    type: 'object',             value: null     },
-                                                                { name: 'instance',     type: 'object',             value: null     },
-                                                                { name: 'map',          type: ['object', 'array'],  value: null     },
-                                                                { name: 'model',        type: ['object', 'array'],  value: null     },
-                                                                { name: 'dom',          type: ['object', 'array'],  value: null     },
-                                                                { name: 'binds',        type: ['object', 'array'],  value: null     }]) !== false) {
+                    if (flex.oop.objects.validate(parameters, [ { name: 'url',              type: 'string'                              },
+                                                                { name: 'nodes',            type: 'array'                               },
+                                                                { name: 'handle',           type: 'function'                            },
+                                                                { name: 'hooks_map',        type: 'object',             value: null     },
+                                                                { name: 'instance',         type: 'object',             value: null     },
+                                                                { name: 'map',              type: ['object', 'array'],  value: null     },
+                                                                { name: 'model',            type: ['object', 'array'],  value: null     },
+                                                                { name: 'dom',              type: ['object', 'array'],  value: null     },
+                                                                { name: 'binds',            type: ['object', 'array'],  value: null     }]) !== false) {
                         return _object({
                             parent      : settings.classes.RESULT,
                             constr      : function () {
                                 this.url = flex.system.url.restore(parameters.url);
                             },
                             privates    : {
-                                nodes       : parameters.nodes,
-                                map         : parameters.map,
-                                model       : parameters.model,
-                                binds       : parameters.binds,
-                                dom         : parameters.dom,
-                                handle      : parameters.handle,
-                                hooks_map   : parameters.hooks_map,
-                                instance    : parameters.instance,
+                                nodes           : parameters.nodes,
+                                map             : parameters.map,
+                                model           : parameters.model,
+                                binds           : parameters.binds,
+                                dom             : parameters.dom,
+                                handle          : parameters.handle,
+                                hooks_map       : parameters.hooks_map,
+                                instance        : parameters.instance,
                             },
                             prototype   : result.proto
                         }).createInstanceClass();
@@ -2137,10 +2332,10 @@
                             }
                         }
                     };
-                    signature = function () {
+                    signature   = function () {
                         return logs.SIGNATURE + ':: caller (' + self.url + ')';
                     };
-                    returning = {
+                    returning   = {
                         render      : render,
                         hooks       : function () { return privates.hooks; },
                         resources   : function () { return privates.resources;},
@@ -2201,7 +2396,7 @@
                                 //Local
                                 pattern             : null
                             },
-                            prototype: caller.proto
+                            prototype       : caller.proto
                         }).createInstanceClass();
                     } else {
                         return null;
@@ -2210,7 +2405,7 @@
             };
             //END: caller class ===============================================
             controllers = {
-                references: {
+                references  : {
                     assign          : function (url, pattern_url) {
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONTROLLERS_LINKS, {});
                         if (storage[url] === void 0) {
@@ -2222,7 +2417,7 @@
                         return storage[url] !== void 0 ? storage[url] : null;
                     }
                 },
-                storage: {
+                storage     : {
                     add : function (pattern_url, controller) {
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONTROLLERS_STORAGE, {});
                         if (storage[pattern_url] === void 0) {
@@ -2235,9 +2430,9 @@
                         return storage[pattern_url] !== void 0 ? storage[pattern_url] : null;
                     },
                 },
-                current: {
+                current     : {
                     data    : null,
-                    set     : function(url){
+                    set     : function (url){
                         controllers.current.data = url;
                     },
                     get     : function () {
@@ -2247,7 +2442,7 @@
                         controllers.current.data = null;
                     },
                 },
-                attach  : function (controller) {
+                attach      : function (controller) {
                     var url     = null,
                         _source = null;
                     if (typeof controller === 'function') {
@@ -2330,6 +2525,29 @@
                         }
                     };
                 }())
+            };
+            conditions  = {
+                storage     : {
+                    add: function (pattern_url, _conditions) {
+                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONDITIONS_STORAGE, {});
+                        storage[pattern_url] = _conditions;
+                    },
+                    get : function (pattern_url) {
+                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONDITIONS_STORAGE, {});
+                        return storage[pattern_url] !== void 0 ? storage[pattern_url] : null;
+                    },
+                },
+                attach: function (_conditions) {
+                    var url     = null,
+                        _source = null;
+                    if (typeof _conditions === 'object' && _conditions !== null) {
+                        url = controllers.current.get() !== null ? controllers.current.get() : flex.resources.attach.js.getCurrentSRC();
+                        if (url !== null) {
+                            _source = controllers.references.getPatternURL(url);
+                            conditions.storage.add(_source, _conditions);
+                        }
+                    }
+                }
             };
             helpers     = {
                 testReg : function(reg, str){
@@ -2443,6 +2661,9 @@
                 controller  : {
                     attach  : controllers.attach
                 },
+                conditions  : {
+                    attach  : conditions.attach
+                },
                 classes     : {
                     NODE_LIST: {
                         addMethod : instance.nodeList.addMethod
@@ -2452,6 +2673,7 @@
             //Global callers
             callers.init();
             window['_controller'] = privates.controller.attach;
+            window['_conditions'] = privates.conditions.attach;
             //Public part
             return {
                 preload : privates.preload,
