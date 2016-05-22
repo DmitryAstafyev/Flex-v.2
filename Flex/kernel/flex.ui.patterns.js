@@ -18,7 +18,7 @@
     if (flex !== void 0) {
         var protofunction = function () { };
         protofunction.prototype = function () {
-            var //Get modules
+            var config      = null,
                 settings    = null,
                 //Classes
                 source      = null,
@@ -35,6 +35,36 @@
                 helpers     = null,
                 conditions  = null,
                 callers     = null;
+            //Config
+            config      = {
+                values  : {
+                    USE_STORAGE_CSS : true,
+                    USE_STORAGE_JS  : true,
+                    USE_STORAGE_HTML: true,
+                },
+                validator  : {
+                    USE_STORAGE_CSS : function(value) { return typeof value === 'boolean' ? true : false;},
+                    USE_STORAGE_JS  : function(value) { return typeof value === 'boolean' ? true : false;},
+                    USE_STORAGE_HTML: function(value) { return typeof value === 'boolean' ? true : false;},
+                },
+                setup   : function (_config) {
+                    if (_config !== null && typeof _config === 'object') {
+                        _object(_config).forEach(function (key, value) {
+                            if (config.values[key] !== void 0 && config.validator[key] !== void 0) {
+                                config.values[key] = config.validator[key](value) ? value : config.values[key];
+                            }
+                        });
+                    }
+                },
+                get     : function () {
+                    return config.values;
+                },
+                debug   : function(){
+                    config.values.USE_STORAGE_CSS   = false;
+                    config.values.USE_STORAGE_JS    = false;
+                    config.values.USE_STORAGE_HTML  = false;
+                }
+            };
             //Settings
             settings    = {
                 measuring       : {
@@ -186,7 +216,7 @@
                             storaged    = null;
                         if (privates.html === null) {
                             storaged = storage.get(self.url);
-                            if (storaged !== null) {
+                            if (storaged !== null && config.get().USE_STORAGE_HTML === true) {
                                 process(storaged, success, fail);
                             } else {
                                 perf_id = measuring.measure();
@@ -343,7 +373,7 @@
                                             if (!journal[url]) {
                                                 journal[url]    = true;
                                                 storaged        = storage.get(url);
-                                                if (storaged === null) {
+                                                if (storaged === null || config.get().USE_STORAGE_CSS === false) {
                                                     perf_id = measuring.measure();
                                                     flex.resources.attach.css.connect(
                                                         url,
@@ -388,7 +418,7 @@
                                                 controllers.references.assign(url, self.url);
                                                 journal[url]    = true;
                                                 storaged        = storage.get(url);
-                                                if (storaged === null || flex.config().resources.USE_STORAGED === false) {
+                                                if (storaged === null || config.get().USE_STORAGE_JS === false) {
                                                     perf_id = measuring.measure();
                                                     flex.resources.attach.js.connect(
                                                         url,
@@ -1614,6 +1644,7 @@
                                 function outcome(key, node, binds, group, prop) {
                                     if (node.attr !== null) {
                                         (function (binds, key, node, attr_name, handles) {
+                                            binds[key] = node.getAttribute(attr_name);
                                             _object(binds).binding().bind(key, function (current, previous) {
                                                 var execute = false;
                                                 if (node.getAttribute(attr_name) !== current) {
@@ -1634,6 +1665,7 @@
                                     } 
                                     if (node.style !== null) {
                                         (function (binds, key, node, prop, handles) {
+                                            binds[key] = node.style[prop];
                                             _object(binds).binding().bind(key, function (current, previous) {
                                                 if (node.style[prop] !== current) {
                                                     node.style[prop] = current;
@@ -1645,6 +1677,7 @@
                                     if (node.prop !== null) {
                                         if (node.node[prop] !== void 0) {
                                             (function (binds, key, node, prop, handles) {
+                                                binds[key] = node[prop];
                                                 _object(binds).binding().bind(key, function (current, previous) {
                                                     if (node[prop] !== current) {
                                                         node[prop] = current;
@@ -1899,7 +1932,8 @@
                             }
                             return _conditions;
                         },
-                        tracking    : function (_conditions, conditions_dom, _hooks){
+                        tracking    : function (_conditions, conditions_dom, _hooks) {
+                            var handles = [];
                             if (typeof _conditions === 'object' && _conditions !== null) {
                                 _object(_conditions).forEach(function (con_name, con_value) {
                                     if (typeof con_value === 'function') {
@@ -1907,7 +1941,8 @@
                                             con_value.tracking = con_value.tracking instanceof Array ? con_value.tracking : [con_value.tracking];
                                             con_value.tracking.forEach(function (tracked) {
                                                 var data    = {},
-                                                    _model  = model.getLast();
+                                                    _model  = model.getLast(),
+                                                    handle  = null;
                                                 if (_model.binds[tracked] !== void 0) {
                                                     if (typeof _model.binds[tracked].addHandle === 'function') {
                                                         _object(_hooks).forEach(function (hook_name, hook_value) {
@@ -1917,8 +1952,8 @@
                                                                 data[hook_name] = hook_value;
                                                             }
                                                         });
-                                                        (function (_conditions, con_name, _data, conditions_dom) {
-                                                            _model.binds[tracked].addHandle(function () {
+                                                        handle = (function (_conditions, con_name, _data, conditions_dom) {
+                                                            return function trackingHandle() {
                                                                 var data    = {},
                                                                     result  = null;
                                                                 _object(_data).forEach(function (data_name, data_value) {
@@ -1957,8 +1992,10 @@
                                                                         });
                                                                     }
                                                                 }
-                                                            });
+                                                            };
                                                         }(_conditions, con_name, data, conditions_dom));
+                                                        _model.binds[tracked].addHandle(handle);
+                                                        handles.push(handle);
                                                     }
                                                 }
                                             });
@@ -1975,6 +2012,9 @@
                                             }
                                         }
                                     }
+                                });
+                                handles.forEach(function (handle) {
+                                    handle();
                                 });
                             }
                         }
@@ -2822,8 +2862,12 @@
             instance.nodeList.init();
             instance.map.init();
             //Init modules
-            flex.libraries.events.create();
-            flex.libraries.binds.create();
+            if (flex.libraries !== void 0) {
+                if (flex.libraries.events !== void 0 && flex.libraries.binds !== void 0) {
+                    flex.libraries.events.create();
+                    flex.libraries.binds.create();
+                }
+            }
             //Private part
             privates    = {
                 preload     : source.init,
@@ -2838,7 +2882,9 @@
                     NODE_LIST: {
                         addMethod : instance.nodeList.addMethod
                     }
-                }
+                },
+                setup       : config.setup,
+                debug       : config.debug
             };
             //Global callers
             callers.init();
@@ -2852,7 +2898,9 @@
                     NODE_LIST: {
                         addMethod: privates.classes.NODE_LIST.addMethod
                     }
-                }
+                },
+                setup   : privates.setup,
+                debug   : privates.debug
             };
         };
         flex.modules.attach({
