@@ -750,6 +750,25 @@
                                 node.setAttribute(settings.css.attrs.MODEL_DATA, JSON.stringify(model));
                             },
                             find        : {
+                                inStyles: function (node, style){
+                                    var properties = style.split(';');
+                                    properties.forEach(function (property) {
+                                        var pair    = property.split(':'),
+                                            model   = property.match(settings.regs.MODEL);
+                                        if (pair.length > 1) {
+                                            if (node.style[pair[0]] !== void 0) {
+                                                model = property.match(settings.regs.MODEL);
+                                                if (model instanceof Array && model.length === 1) {
+                                                    model = model[0].replace(settings.regs.MODEL_BORDERS, '');
+                                                    convert.model.setAttrData(node, {
+                                                        style: pair[0],
+                                                        model: model
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    });
+                                },
                                 inAttrs : function (node, model, reg_model) {
                                     var reg_model = reg_model instanceof RegExp ? reg_model : new RegExp(settings.regs.MODEL_OPEN + model + settings.regs.MODEL_CLOSE, 'gi');
                                     if (node.attributes) {
@@ -757,10 +776,14 @@
                                             var defaultIEFix = null;
                                             if (typeof attr.nodeValue === 'string' && attr.nodeValue !== '') {
                                                 if (helpers.testReg(reg_model, attr.nodeValue)) {
-                                                    convert.model.setAttrData(node, {
-                                                        attr    : attr.nodeName,
-                                                        model   : model
-                                                    });
+                                                    if (attr.nodeName === 'style') {
+                                                        convert.model.find.inStyles(node, attr.nodeValue);
+                                                    } else {
+                                                        convert.model.setAttrData(node, {
+                                                            attr    : attr.nodeName,
+                                                            model   : model
+                                                        });
+                                                    }
                                                     node.removeAttribute(attr.nodeName);
                                                     if (node[attr.nodeName] !== void 0) {
                                                         node[attr.nodeName] = null;
@@ -843,15 +866,28 @@
                             },
                             getNodes: function (condition_name, condition_node, parent) {
                                 var inside_condition    = false,
-                                    nodes               = [];
+                                    nodes               = [],
+                                    included            = [],
+                                    inside_included     = false;
                                 try {
                                     Array.prototype.forEach.call(parent.childNodes, function (child) {
+                                        var con_included = null;
                                         if (inside_condition) {
                                             if (child.nodeType === 8 && child.nodeValue === condition_name) {
                                                 inside_condition = null;
                                                 throw 'closed';
                                             } else {
-                                                nodes.push(child);
+                                                if (child.nodeType === 8 && helpers.testReg(settings.regs.CONDITION_STRUCTURE, child.nodeValue)) {
+                                                    con_included = convert.conditions.getName(child.nodeValue).name;
+                                                    if (included.indexOf(con_included) === -1) {
+                                                        included.push(con_included);
+                                                    }
+                                                    inside_included = true;
+                                                } else if (child.nodeType === 8 && included.indexOf(child.nodeValue) !== -1) {
+                                                    inside_included = false;
+                                                } else /*if (inside_included === false) */{
+                                                    nodes.push(child);
+                                                }
                                             }
                                         } else if (child === condition_node) {
                                             inside_condition = true;
@@ -871,23 +907,29 @@
                                     flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_END + ' (condition name: ' + condition_name + ')', flex.logs.types.CRITICAL);
                                     throw logs.pattern.CANNOT_FIND_CONDITION_END;
                                 }
-                                return nodes;
+                                return {
+                                    nodes       : nodes,
+                                    included    : included
+                                };
                             },
                             find    : function (node){
                                 function search(node, conditions) {
                                     if (node.childNodes !== void 0) {
                                         Array.prototype.forEach.call(node.childNodes, function (node) {
-                                            var condition = null;
+                                            var condition   = null,
+                                                found       = null;
                                             if (node.nodeType === 8) {
                                                 if (helpers.testReg(settings.regs.CONDITION_STRUCTURE, node.nodeValue)) {
                                                     condition = convert.conditions.getName(node.nodeValue);
                                                     if (conditions[condition.name] === void 0) {
                                                         conditions[condition.name] = [];
                                                     }
+                                                    found = convert.conditions.getNodes(condition.name, node, node.parentNode);
                                                     conditions[condition.name].push({
-                                                        value   : condition.value,
-                                                        comment : node,
-                                                        nodes   : convert.conditions.getNodes(condition.name, node, node.parentNode)
+                                                        value       : condition.value,
+                                                        comment     : node,
+                                                        nodes       : found.nodes,
+                                                        included    : found.included
                                                     });
                                                 }
                                             } else if (node.childNodes !== void 0 && node.childNodes.length > 0) {
@@ -896,6 +938,14 @@
                                         });
                                     }
                                 };
+                                /*
+                                function group(conditions) {
+                                    _object(conditions).forEach(function (con_name, con_values) {
+                                        con_values.forEach(function (condition) {
+                                        });
+                                    });
+                                };
+                                */
                                 function setupAppendMethod(conditions) {
                                     function add(comment) {
                                         if (_comments.indexOf(comment) === -1) {
@@ -990,31 +1040,109 @@
                                 var conditions      = convert.conditions.find(clone),
                                     conditions_dom  = {};
                                 _object(_conditions).forEach(function (con_name, con_value) {
-                                    var found_flag = false;
+                                    var found_flag  = false;
                                     if (conditions[con_name] !== void 0) {
                                         conditions_dom[con_name] = {};
                                         conditions[con_name].forEach(function (condition) {
                                             conditions_dom[con_name][condition.value] = conditions_dom[con_name][condition.value] === void 0 ? [] : conditions_dom[con_name][condition.value];
-                                            condition.nodes.forEach(function (node) {
-                                                conditions_dom[con_name][condition.value].push({
-                                                    append: function append() {
-                                                        return condition.append(node);
-                                                    },
-                                                    remove: function remove() {
-                                                        if (node.parentNode !== null) {
-                                                            return node.parentNode.removeChild(node);
-                                                        } else {
-                                                            return false;
+                                            conditions_dom[con_name][condition.value] = (function (_append, _nodes, _included) {
+                                                var methods = {
+                                                    append      : function append() {
+                                                        var to_delete = [];
+                                                        _nodes.forEach(function (node, index) {
+                                                            if (node.__to_deleted === void 0) {
+                                                                _append(node);
+                                                            } else {
+                                                                to_delete.push(index);
+                                                            }
+                                                        });
+                                                        if (to_delete.length > 0) {
+                                                            _nodes = _nodes.filter(function (val, index) {
+                                                                return to_delete.indexOf(index) !== -1 ? false : true;
+                                                            });
                                                         }
                                                     },
-                                                });
+                                                    remove      : function remove() {
+                                                        var to_delete = [];
+                                                        _nodes.forEach(function (node, index) {
+                                                            if (node.parentNode !== null) {
+                                                                return node.parentNode.removeChild(node);
+                                                            }
+                                                            if (node.__to_deleted !== void 0) {
+                                                                to_delete.push(index);
+                                                            }
+                                                        });
+                                                        if (to_delete.length > 0) {
+                                                            _nodes = _nodes.filter(function (val, index) {
+                                                                return to_delete.indexOf(index) !== -1 ? false : true;
+                                                            });
+                                                        }
+                                                    },
+                                                    del         : function del() {
+                                                        _nodes.forEach(function (node) {
+                                                            node.__to_deleted = true;
+                                                        });
+                                                    },
+                                                    included    : _included
+                                                };
+                                                methods.append.blocked = false;
+                                                methods.remove.blocked = false;
+                                                return methods;
+                                            }(condition.append, condition.nodes, condition.included));
+                                            condition.nodes.forEach(function (node) {
                                                 if (condition.value !== con_value) {
-                                                    node.parentNode.removeChild(node);
+                                                    if (node.parentNode !== null) {
+                                                        node.parentNode.removeChild(node);
+                                                    }
                                                 } else {
                                                     found_flag = true;
                                                 }
                                             });
                                         });
+                                        conditions_dom[con_name].__update   = (function (values) {
+                                            return function update(res) {
+                                                _object(values).forEach(function (name, methods) {
+                                                    if (methods.append !== void 0 && methods.remove !== void 0) {
+                                                        if (!methods.append.blocked && !methods.remove.blocked) {
+                                                            if (res === name) {
+                                                                methods.append();
+                                                            } else {
+                                                                methods.remove();
+                                                            }
+                                                        }
+                                                    }
+                                                });
+                                            };
+                                        }(conditions_dom[con_name]));
+                                        conditions_dom[con_name].__block    = (function (values) {
+                                            return function block(res) {
+                                                _object(values).forEach(function (name, methods) {
+                                                    if (methods.append !== void 0 && methods.remove !== void 0) {
+                                                        methods.append.blocked = true;
+                                                        methods.remove.blocked = true;
+                                                    }
+                                                });
+                                            };
+                                        }(conditions_dom[con_name]));
+                                        conditions_dom[con_name].__unblock  = (function (values) {
+                                            return function unblock(res) {
+                                                _object(values).forEach(function (name, methods) {
+                                                    if (methods.append !== void 0 && methods.remove !== void 0) {
+                                                        methods.append.blocked = false;
+                                                        methods.remove.blocked = false;
+                                                    }
+                                                });
+                                            };
+                                        }(conditions_dom[con_name]));
+                                        conditions_dom[con_name].__included = (function (values) {
+                                            var included = [];
+                                            _object(values).forEach(function (name, methods) {
+                                                if (methods.included !== void 0) {
+                                                    included = included.concat(methods.included);
+                                                }
+                                            });
+                                            return included;
+                                        }(conditions_dom[con_name]));
                                         if (!found_flag) {
                                             flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_VALUE + ' (condition name: ' + con_name + ' = "' + con_value + '")', flex.logs.types.WARNING);
                                         }
@@ -1416,8 +1544,9 @@
                                             }
                                             model.current.binds[_model.model].push({
                                                 node    : model_node,
-                                                attr    : _model.attr === void 0 ? null : _model.attr,
-                                                prop    : _model.prop === void 0 ? null : _model.prop
+                                                attr    : _model.attr   === void 0 ? null : _model.attr,
+                                                prop    : _model.prop   === void 0 ? null : _model.prop,
+                                                style   : _model.style  === void 0 ? null : _model.style,
                                             });
                                         });
                                     }
@@ -1448,6 +1577,16 @@
                                                 }
                                             });
                                         }(binds, key, node.node, node.attr, group[key].handles));
+                                    }
+                                    if (node.style !== null) {
+                                        (function (binds, key, node, prop, handles) {
+                                            _node(node).bindingProps().bind('style.' + prop, function (prop, current, previous) {
+                                                if (binds[key] !== current) {
+                                                    binds[key] = current;
+                                                    executeHandles(handles, this, prop, current);
+                                                }
+                                            });
+                                        }(binds, key, node.node, node.style, group[key].handles));
                                     }
                                     if (helpers.binds.isPossible(node.node, prop)) {
                                         (function (binds, key, node, attr_name, handles) {
@@ -1492,7 +1631,18 @@
                                                 }
                                             });
                                         }(binds, key, node.node, node.attr, group[key].handles));
-                                    } else {
+                                    } 
+                                    if (node.style !== null) {
+                                        (function (binds, key, node, prop, handles) {
+                                            _object(binds).binding().bind(key, function (current, previous) {
+                                                if (node.style[prop] !== current) {
+                                                    node.style[prop] = current;
+                                                    executeHandles(handles, node.style, prop, current);
+                                                }
+                                            });
+                                        }(binds, key, node.node, node.style, group[key].handles));
+                                    }
+                                    if (node.prop !== null) {
                                         if (node.node[prop] !== void 0) {
                                             (function (binds, key, node, prop, handles) {
                                                 _object(binds).binding().bind(key, function (current, previous) {
@@ -1767,40 +1917,60 @@
                                                                 data[hook_name] = hook_value;
                                                             }
                                                         });
-                                                        (function (_condition, _data, conditions_dom) {
+                                                        (function (_conditions, con_name, _data, conditions_dom) {
                                                             _model.binds[tracked].addHandle(function () {
                                                                 var data    = {},
                                                                     result  = null;
                                                                 _object(_data).forEach(function (data_name, data_value) {
                                                                     data[data_name] = typeof data_value === 'function' ? data_value() : data_value;
                                                                 });
-                                                                result = _condition(data);
-                                                                if (conditions_dom[result] !== void 0) {
-                                                                    _object(conditions_dom).forEach(function (res, nodes) {
-                                                                        nodes.forEach(function (node) {
-                                                                            if (res === result) {
-                                                                                node.append();
-                                                                            } else {
-                                                                                node.remove();
+                                                                result = _conditions[con_name](data);
+                                                                if (conditions_dom[con_name][result] !== void 0) {
+                                                                    if (conditions_dom[con_name].__included.length > 0) {
+                                                                        conditions_dom[con_name].__included.forEach(function (con_name) {
+                                                                            if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
+                                                                                if (_conditions[con_name].tracking !== void 0) {
+                                                                                    conditions_dom[con_name].__unblock();
+                                                                                }
                                                                             }
                                                                         });
-                                                                    });
+                                                                    }
+                                                                    conditions_dom[con_name].__update(result);
+                                                                    if (conditions_dom[con_name][result].included.length > 0) {
+                                                                        conditions_dom[con_name][result].included.forEach(function (con_name) {
+                                                                            var res = null;
+                                                                            if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
+                                                                                if (_conditions[con_name].tracking !== void 0) {
+                                                                                    res = _conditions[con_name](data);
+                                                                                    conditions_dom[con_name].__update(res);
+                                                                                }
+                                                                            }
+                                                                        });
+                                                                    }
+                                                                    if (conditions_dom[con_name].__included.length > 0) {
+                                                                        conditions_dom[con_name].__included.forEach(function (con_name) {
+                                                                            if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
+                                                                                if (_conditions[con_name].tracking !== void 0) {
+                                                                                    conditions_dom[con_name].__block();
+                                                                                }
+                                                                            }
+                                                                        });
+                                                                    }
                                                                 }
                                                             });
-                                                        }(con_value, data, conditions_dom[con_name]));
+                                                        }(_conditions, con_name, data, conditions_dom));
                                                     }
                                                 }
                                             });
                                         } else {
                                             var result = con_value(_hooks);
                                             if (conditions_dom[con_name] !== void 0) {
-                                                _object(conditions_dom[con_name]).forEach(function (res, nodes) {
-                                                    nodes.forEach(function (node) {
-                                                        if (res !== result) {
-                                                            conditions_dom[con_name][res] = null;
-                                                            delete conditions_dom[con_name][res];
-                                                        }
-                                                    });
+                                                _object(conditions_dom[con_name]).forEach(function (res, methods) {
+                                                    if (res !== result && methods.del !== void 0) {
+                                                        methods.del();
+                                                        conditions_dom[con_name][res] = null;
+                                                        delete conditions_dom[con_name][res];
+                                                    }
                                                 });
                                             }
                                         }

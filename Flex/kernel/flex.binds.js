@@ -50,7 +50,7 @@
                 }
             };
             //Binding properies of objects
-            objects = {
+            objects         = {
                 storage : {
                     create : function (object) {
                         var Storage = function (object) {
@@ -230,7 +230,7 @@
                 },
             };
             //Binding attributes of nodes
-            attrs       = {
+            attrs           = {
                 storage : {
                     create : function (node) {
                         var Storage = function (node) {
@@ -394,7 +394,7 @@
                 },
             };
             //Binding properties of nodes
-            props       = {
+            props           = {
                 storage : {
                     create : function (node) {
                         var Storage = function (node) {
@@ -418,44 +418,63 @@
                                     }
                                 );
                             },
+                            prop            : function(prop){
+                                var res     = null,
+                                    node    = this.node;
+                                prop.split('.').forEach(function (step, index, steps) {
+                                    if (node[step] !== void 0 && index < steps.length - 1) {
+                                        node = node[step];
+                                    } else if (node[step] !== void 0 && index === steps.length - 1) {
+                                        res = {
+                                            parent  : node,
+                                            name    : step
+                                        };
+                                    }
+                                });
+                                return res;
+                            },
                             handle          : function (attr, mutation) {
                                 var self = this;
                                 _object(this.binds).forEach(function (prop, bind_data) {
-                                    var prop_value = self.node[prop];
+                                    var prop_value = self.binds[prop].parent[prop];
                                     if (prop_value !== self.binds[prop].current) {
                                         self.binds[prop].previous   = self.binds[prop].current;
                                         self.binds[prop].current    = prop_value;
                                         _object(self.binds[prop].handles).forEach(function (id, handle) {
-                                            handle.call(self.node, prop, self.binds[prop].current, self.binds[prop].previous, mutation, id);
+                                            handle.call(self.binds[prop].parent, prop, self.binds[prop].current, self.binds[prop].previous, mutation, id);
                                         });
                                     }
                                 });
                             },
                             make            : function (prop) {
-                                if (!this.binds[prop]) {
-                                    this.binds[prop] = {
+                                var prop = this.prop(prop);
+                                if (!this.binds[prop.name]) {
+                                    this.binds[prop.name] = {
                                         handles     : {},
                                         previous    : null,
-                                        current     : this.node[prop]
+                                        current     : prop.parent[prop.name],
+                                        parent      : prop.parent
                                     };
                                 }
                             },
                             add             : function (prop, handle) {
-                                var id = flex.unique();
+                                var id      = flex.unique(),
+                                    prop    = this.prop(prop);
                                 //Save handle ID in handle
                                 handle[settings.props.HANDLE_ID_PROPERTY] = id;
                                 //Add handle in storage
-                                this.binds[prop].handles[id] = handle;
+                                this.binds[prop.name].handles[id] = handle;
                                 //Return handle ID
                                 return id;
                             },
                             remove          : function (prop, id) {
-                                var result = null;
-                                if (this.binds[prop]) {
-                                    if (this.binds[prop].handles[id]) {
-                                        delete this.binds[prop].handles[id];
-                                        if (Object.keys(this.binds[prop].handles).length === 0) {
-                                            result = delete this.binds[prop];
+                                var result  = null,
+                                    prop    = this.prop(prop);
+                                if (this.binds[prop.name]) {
+                                    if (this.binds[prop.name].handles[id]) {
+                                        delete this.binds[prop.name].handles[id];
+                                        if (Object.keys(this.binds[prop.name].handles).length === 0) {
+                                            result = delete this.binds[prop.name];
                                             this.destroy();
                                             return result;
                                         }
@@ -464,16 +483,18 @@
                                 return result;
                             },
                             kill            : function (prop) {
-                                var result = null;
-                                if (this.binds[prop]) {
-                                    result = delete this.binds[prop];
+                                var result  = null,
+                                    prop    = this.prop(prop);
+                                if (this.binds[prop.name]) {
+                                    result = delete this.binds[prop.name];
                                     this.destroy();
                                     return result;
                                 }
                                 return result;
                             },
-                            isPropReady     : function (prop) {
-                                return this.binds[prop] !== void 0 ? true : false;
+                            isPropReady: function (prop) {
+                                var prop = this.prop(prop);
+                                return this.binds[prop.name] !== void 0 ? true : false;
                             },
                             destroy         : function (){
                                 if (Object.keys(this.binds).length === 0) {
@@ -494,12 +515,23 @@
                     ///     <param name="handle"    type="FUNCTION" >Handle of prop changing</param>
                     ///     <returns type="STRING"/>
                     /// </signature>
+                    function isValidProp(node, prop) {
+                        var res = false;
+                        prop.split('.').forEach(function (step, index, steps) {
+                            if (node[step] !== void 0 && index < steps.length - 1) {
+                                node = node[step];
+                            } else if (node[step] !== void 0 && index === steps.length - 1) {
+                                res = true;
+                            }
+                        });
+                        return res;
+                    };
                     var storage = settings.props.STORAGE_PROPERTY,
                         value   = null;
                     if (mutationCross.attach !== null) {
                         if (node !== void 0 && typeof prop === 'string' && typeof handle === 'function') {
-                            if (node.nodeName) {
-                                if (node[prop] !== void 0) {
+                            if (node.nodeName !== void 0) {
+                                if (isValidProp(node, prop)) {
                                     if (!node[storage]) {
                                         //Node isn't listening
                                         node[storage] = props.storage.create(node);
@@ -559,7 +591,7 @@
                     throw 'props.unbind::' + errors.objects.INCORRECT_ARGUMENTS;
                 },
             };
-            mutationCross = {
+            mutationCross   = {
                 init: function () {
                     mutationCross.attach = mutationCross.attach();
                 },
@@ -621,9 +653,9 @@
                     return null;
                 }
             };
-            helpers     = {
+            helpers         = {
             };
-            callers     = {
+            callers         = {
                 init: function () {
                     flex.callers.define.object('binding.bind',          function (property, handle) {
                         return objects.bind(this.target, property, handle);
