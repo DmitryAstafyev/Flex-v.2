@@ -1304,9 +1304,6 @@
                     wrappers.prototypes.add.object('createInstanceClass', function () {
                         return oop.classes.create(this.target);
                     });
-                    wrappers.prototypes.add.object('isInstanceOfClass', function () {
-                        return oop.classes.instanceOf(this.target);
-                    });
                 }
             }
         };

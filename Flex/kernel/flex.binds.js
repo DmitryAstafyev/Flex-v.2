@@ -20,12 +20,11 @@
                 props           = null,
                 mutationCross   = null,
                 privates        = null,
-                helpers         = null,
                 callers         = null,
                 settings        = null,
                 errors          = null,
                 support         = null;
-            settings    = {
+            settings        = {
                 objects : {
                     STORAGE_PROPERTY    : 'flex.object.bind.storage',
                     HANDLE_ID_PROPERTY  : 'flex.object.bind.handle.id'
@@ -39,7 +38,7 @@
                     HANDLE_ID_PROPERTY  : 'flex.props.bind.handle.id'
                 },
             };
-            errors      = {
+            errors          = {
                 objects: {
                     INCORRECT_ARGUMENTS : 'defined incorrect arguments or not defined at all',
                     PROPERTY_IS_CONST   : 'cannot kill bind with property, because property now is constant'
@@ -653,8 +652,6 @@
                     return null;
                 }
             };
-            helpers         = {
-            };
             callers         = {
                 init: function () {
                     flex.callers.define.object('binding.bind',          function (property, handle) {
@@ -738,7 +735,7 @@
                     });
                 }
             };
-            support     = {
+            support         = {
                 check   : function () {
                     if (!Object.defineProperty) {
                         throw errors.support.DEFINE_PROPERTY;
@@ -755,7 +752,7 @@
             //Check support
             support.check();
             //Public part
-            privates    = {
+            privates        = {
             };
             return {
             };

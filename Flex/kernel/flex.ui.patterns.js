@@ -27,6 +27,7 @@
                 result      = null,
                 caller      = null,
                 //Methods
+                layout      = null,
                 privates    = null,
                 controllers = null,
                 storage     = null,
@@ -37,17 +38,19 @@
                 callers     = null;
             //Config
             config      = {
-                values  : {
+                values      : {
                     USE_STORAGE_CSS : true,
                     USE_STORAGE_JS  : true,
                     USE_STORAGE_HTML: true,
+                    PATTERN_NODE    : 'pattern'
                 },
-                validator  : {
-                    USE_STORAGE_CSS : function(value) { return typeof value === 'boolean' ? true : false;},
-                    USE_STORAGE_JS  : function(value) { return typeof value === 'boolean' ? true : false;},
-                    USE_STORAGE_HTML: function(value) { return typeof value === 'boolean' ? true : false;},
+                validator   : {
+                    USE_STORAGE_CSS : function (value) { return typeof value === 'boolean' ? true : false;},
+                    USE_STORAGE_JS  : function (value) { return typeof value === 'boolean' ? true : false;},
+                    USE_STORAGE_HTML: function (value) { return typeof value === 'boolean' ? true : false;},
+                    PATTERN_NODE    : function (value) { return typeof value === 'string' ? (value.length > 0 ? (value.replace(/\w/gi, '').length === 0 ? true : false) : false) : false; },
                 },
-                setup   : function (_config) {
+                setup       : function (_config) {
                     if (_config !== null && typeof _config === 'object') {
                         _object(_config).forEach(function (key, value) {
                             if (config.values[key] !== void 0 && config.validator[key] !== void 0) {
@@ -56,10 +59,10 @@
                         });
                     }
                 },
-                get     : function () {
+                get         : function () {
                     return config.values;
                 },
-                debug   : function(){
+                debug       : function (){
                     config.values.USE_STORAGE_CSS   = false;
                     config.values.USE_STORAGE_JS    = false;
                     config.values.USE_STORAGE_HTML  = false;
@@ -174,7 +177,7 @@
                     FAIL_TO_PARSE_TEMPLATE  : '0003:FAIL_TO_PARSE_TEMPLATE',
                     FAIL_TO_LOAD_JS_RESOURCE: '0004:FAIL_TO_LOAD_JS_RESOURCE',
                 },
-                pattern: {
+                pattern     : {
                     CANNOT_FIND_FIRST_TAG               : '1000:CANNOT_FIND_FIRST_TAG',
                     CANNOT_CREATE_WRAPPER               : '1001:CANNOT_CREATE_WRAPPER',
                     WRONG_PATTERN_WRAPPER               : '1002:WRONG_PATTERN_WRAPPER',
@@ -187,14 +190,17 @@
                     CANNOT_FIND_CONDITION_VALUE         : '1009:CANNOT_FIND_CONDITION_VALUE',
                     UNEXCEPTED_ERROR_CONDITION_PARSER   : '1010:UNEXCEPTED_ERROR_CONDITION_PARSER',
                 },
-                instance : {
+                instance    : {
                     BAD_HOOK_FOR_CLONE      : '2000:BAD_HOOK_FOR_CLONE',
                     NO_URL_FOR_CLONE_HOOK   : '2001:NO_URL_FOR_CLONE_HOOK',
                 },
-                caller : {
+                caller      : {
                     CANNOT_INIT_PATTERN     : '3000:CANNOT_INIT_PATTERN',
                     CANNOT_GET_CHILD_PATTERN: '3001:CANNOT_GET_CHILD_PATTERN',
                     CANNOT_GET_PATTERN      : '3002:CANNOT_GET_PATTERN',
+                },
+                layout      : {
+                    BAD_ARRAY_OF_HOOKS      : '4000:BAD_ARRAY_OF_HOOKS',
                 }
             };
             //Classes implementations
@@ -721,28 +727,6 @@
                                             node.parentNode.removeChild(node);
                                             return true;
                                         }
-                                        /*
-                                        if (typeof value === 'string') {
-                                            node.innerHTML  = value;
-                                            node            = verifyCompatibility(node, value);
-                                            return true;
-                                        }
-                                        if (typeof value.innerHTML === 'string') {
-                                            node.appendChild(value);
-                                            return true;
-                                        }
-                                        if (value instanceof settings.classes.RESULT) {
-                                            value.nodes().forEach(function (_node) {
-                                                node.appendChild(_node);
-                                            });
-                                            return true;
-                                        }
-                                        if (value.toString !== void 0) {
-                                            node.innerHTML  = value;
-                                            node            = verifyCompatibility(node, value);
-                                            return true;
-                                        }
-                                        */
                                     };
                                 },
                             },
@@ -968,14 +952,6 @@
                                         });
                                     }
                                 };
-                                /*
-                                function group(conditions) {
-                                    _object(conditions).forEach(function (con_name, con_values) {
-                                        con_values.forEach(function (condition) {
-                                        });
-                                    });
-                                };
-                                */
                                 function setupAppendMethod(conditions) {
                                     function add(comment) {
                                         if (_comments.indexOf(comment) === -1) {
@@ -2343,19 +2319,38 @@
                     clone       = function (hooks) {
                         return privates.instance.clone(privates.hooks_map, hooks);
                     };
-                    mount       = function (destination, replace) {
+                    mount       = function (destination, before, after, replace) {
                         if (destination !== null) {
-                            destination.forEach.call(destination, function (parent) {
+                            Array.prototype.forEach.call(destination, function (parent) {
                                 privates.nodes.forEach(function (node) {
                                     if (!replace) {
                                         parent.appendChild(node);
                                     } else {
                                         parent.parentNode.insertBefore(node, parent);
                                     }
-                                    if (replace) {
-                                        parent.parentNode.removeChild(parent);
-                                    }
                                 });
+                                if (replace) {
+                                    parent.parentNode.removeChild(parent);
+                                }
+                            });
+                        } else if (before !== null && before.parentNode !== void 0 && before.parentNode !== null) {
+                            Array.prototype.forEach.call(before, function (parent) {
+                                privates.nodes.forEach(function (node) {
+                                    before.parentNode.insertBefore(node, before);
+                                });
+                            });
+                        } else if (after !== null && after.parentNode !== void 0 && after.parentNode !== null) {
+                            Array.prototype.forEach.call(after, function (parent) {
+                                var _before = after.nextSibling !== void 0 ? after.nextSibling : null;
+                                if (_before !== null) {
+                                    privates.nodes.forEach(function (node) {
+                                        _before.parentNode.insertBefore(node, _before);
+                                    });
+                                } else {
+                                    privates.nodes.forEach(function (node) {
+                                        after.parentNode.appendChild(node);
+                                    });
+                                }
                             });
                         }
                     };
@@ -2514,7 +2509,7 @@
                                     if (privates.pattern !== null) {
                                         privates.pattern    = privates.pattern.build(privates.hooks, privates.resources, privates.conditions);
                                         if (privates.pattern instanceof settings.classes.RESULT) {
-                                            privates.pattern.mount(privates.node, privates.replace);
+                                            privates.pattern.mount(privates.node, privates.before, privates.after, privates.replace);
                                             if (privates.callbacks.success !== null) {
                                                 privates.pattern.handle()(privates.callbacks.success, privates.resources);
                                             }
@@ -2576,6 +2571,8 @@
                     /// <returns type="boolean">true - success; false - fail</returns>
                     if (flex.oop.objects.validate(parameters, [ { name: 'url',                  type: 'string'                                  },
                                                                 { name: 'node',                 type: ['node', 'string'],   value: null         },
+                                                                { name: 'before',               type: ['node', 'string'],   value: null         },
+                                                                { name: 'after',                type: ['node', 'string'],   value: null         },
                                                                 { name: 'id',                   type: 'string',             value: flex.unique()},
                                                                 { name: 'replace',              type: 'boolean',            value: false        },
                                                                 { name: 'hooks',                type: ['object', 'array'],  value: null         },
@@ -2595,7 +2592,9 @@
                             privates        : {
                                 //From parameters
                                 id                  : parameters.id,
-                                node                : parameters.node !== null ? (typeof parameters.node === 'string' ? _nodes(parameters.node).target : [parameters.node]) : null,
+                                node                : parameters.node   !== null ? (typeof parameters.node      === 'string' ? _nodes(parameters.node   ).target : [parameters.node]     ) : null,
+                                before              : parameters.before !== null ? (typeof parameters.before    === 'string' ? _nodes(parameters.before ).target : [parameters.before]   ) : null,
+                                after               : parameters.after  !== null ? (typeof parameters.after     === 'string' ? _nodes(parameters.after  ).target : [parameters.after]    ) : null,
                                 replace             : parameters.replace,
                                 hooks               : parameters.hooks,
                                 data                : parameters.data,
@@ -2614,6 +2613,114 @@
                 },
             };
             //END: caller class ===============================================
+            layout      = {
+                init    : function(is_auto){
+                    function isValid(pattern) {
+                        var nodeName = pattern.parentNode.nodeName.toLowerCase();
+                        if (nodeName !== config.values.PATTERN_NODE) {
+                            if (nodeName !== 'body'){
+                                return isValid(pattern.parentNode);
+                            } else {
+                                return true;
+                            }
+                        } else {
+                            return false;
+                        }
+                    };
+                    var patterns    = _nodes(config.values.PATTERN_NODE).target,
+                        is_auto     = typeof is_auto === 'boolean' ? is_auto : false;
+                    if (patterns !== null && patterns instanceof NodeList && patterns.length > 0) {
+                        Array.prototype.forEach.call(patterns, function (pattern) {
+                            if (isValid(pattern)) {
+                                if ((!pattern.hasAttribute('success') && !pattern.hasAttribute('error')) || !is_auto) {
+                                    layout.caller(pattern);
+                                }
+                            }
+                        });
+                    }
+                },
+                caller  : function (pattern, is_child) {
+                    function getIndex(source, hook) {
+                        var index = -1;
+                        try{
+                            source.forEach(function(hooks, _index){
+                                if (hooks[hook] === void 0){
+                                    index = _index;
+                                    throw 'found';
+                                }
+                            });
+                        }catch(e){}
+                        return index;
+                    };
+                    function getCallback(pattern, type) {
+                        var callback = pattern.getAttribute(type),
+                            parts       = null;
+                        if (typeof callback === 'string' && callback !== '') {
+                            parts       = callback.split('.');
+                            callback    = window;
+                            parts.forEach(function (part) {
+                                if (callback !== null && callback[part] !== void 0) {
+                                    callback = callback[part];
+                                } else {
+                                    callback = null;
+                                }
+                            });
+                            return callback;
+                        } else {
+                            return null;
+                        }
+                    };
+                    var _caller     = null,
+                        is_child    = is_child !== void 0 ? is_child : false,
+                        url         = null;
+                    if (pattern.hasAttribute('src')) {
+                        _caller = {
+                            url     : pattern.getAttribute('src'),
+                            hooks   : {}
+                        };
+                        Array.prototype.forEach.call(pattern.children, function (child) {
+                            var index   = 0,
+                                hook    = child.nodeName.toLowerCase();
+                            if (_caller.hooks[hook] !== void 0 && !(_caller.hooks instanceof Array)) {
+                                _caller.hooks = [_caller.hooks];
+                            }
+                            if (_caller.hooks instanceof Array) {
+                                index = getIndex(_caller.hooks, hook);
+                                if (index === -1) {
+                                    _caller.hooks.push({});
+                                    index = _caller.hooks.length - 1;
+                                }
+                                if (!child.hasAttribute('src')) {
+                                    _caller.hooks[index][hook] = child.innerHTML;
+                                } else {
+                                    _caller.hooks[index][hook] = layout.caller(child, true);
+                                }
+                            } else {
+                                if (!child.hasAttribute('src')) {
+                                    _caller.hooks[hook] = child.innerHTML;
+                                } else {
+                                    _caller.hooks[hook] = layout.caller(child, true);
+                                }
+                            }
+                        });
+                        if (typeof _caller.hooks === 'object' && Object.keys(_caller.hooks).length === 0) {
+                            delete _caller.hooks;
+                        }
+                        if (!is_child) {
+                            _caller.node        = pattern;
+                            _caller.replace     = true;
+                            _caller.callbacks   = {
+                                success : getCallback(pattern, 'success'),
+                                error   : getCallback(pattern, 'error'),
+                            };
+                            _caller = caller.instance(_caller).render();
+                        } else {
+                            _caller = caller.instance(_caller);
+                        }
+                    }
+                    return _caller;
+                }
+            };
             controllers = {
                 references  : {
                     assign          : function (url, pattern_url) {
@@ -2884,12 +2991,15 @@
                     }
                 },
                 setup       : config.setup,
-                debug       : config.debug
+                debug       : config.debug,
+                layout      : layout.init
             };
             //Global callers
             callers.init();
             window['_controller'] = privates.controller.attach;
             window['_conditions'] = privates.conditions.attach;
+            //Run layout parser
+            layout.init(true);
             //Public part
             return {
                 preload : privates.preload,
@@ -2900,7 +3010,8 @@
                     }
                 },
                 setup   : privates.setup,
-                debug   : privates.debug
+                debug   : privates.debug,
+                layout  : privates.layout
             };
         };
         flex.modules.attach({
