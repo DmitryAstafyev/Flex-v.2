@@ -19,13 +19,11 @@
             * data-flex-ui-window-move-container="id"
             * data-flex-ui-window-move-hook="id"
             * */
-            var //Get modules
-                html            = flex.libraries.html.create(),
-                events          = flex.libraries.events.create(),
-                //Variables
+            var //Variables
                 privates        = null,
                 render          = null,
                 coreEvents      = null,
+                patterns        = null,
                 settings        = null;
             settings = {
                 CONTAINER           : 'data-flex-ui-window-move-container',
@@ -38,9 +36,8 @@
                 STATE_STORAGE       : 'flex-window-move-instance-state',
             };
             function init(id) {
-                var selector    = new html.select.bySelector(),
-                    id          = id || null,
-                    containers  = selector.all('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']:not([' + settings.INITED + '])');
+                var id          = id || null,
+                    containers  = _nodes('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']:not([' + settings.INITED + '])').target;
                 if (containers !== null) {
                     Array.prototype.forEach.call(
                         containers,
@@ -48,7 +45,7 @@
                             var id      = container.getAttribute(settings.CONTAINER),
                                 hooks   = null;
                             if (id !== '' && id !== null) {
-                                hooks = selector.all('*[' + settings.HOOK + '="' + id + '"]');
+                                hooks = _nodes('*[' + settings.HOOK + '="' + id + '"]').target;
                                 if (hooks !== null) {
                                     render.attach(container, hooks, id);
                                     coreEvents.attach(container, id);
@@ -61,12 +58,10 @@
             };
             render      = {
                 attach  : function (container, hooks, id) {
-                    var DOMEvents = events.DOMEvents();
                     Array.prototype.forEach.call(
                         hooks,
                         function (hook) {
-                            DOMEvents.add(
-                                hook,
+                            _node(hook).events().add(
                                 'mousedown',
                                 function (event) {
                                     render.start(event, container, hook, id);
@@ -88,16 +83,12 @@
                         }
                         return null;
                     }
-                    var possition   = null,
-                        scroll      = null,
-                        pos         = null,
+                    var pos         = null,
                         scrl        = null,
                         isFixed     = null;
                     if (flex.overhead.objecty.get(container, settings.STATE_STORAGE, false, false) === false) {
-                        possition   = html.position();
-                        scroll      = html.scroll();
-                        pos         = possition.byPage(container);
-                        scrl        = scroll.get(container.parentNode);
+                        pos         = _node(container).html().position().byPage();
+                        scrl        = _node(container.parentNode).html().scroll().position();
                         isFixed     = getPosition(container) !== 'fixed' ? false : true;
                         flex.overhead.globaly.set(
                             settings.GLOBAL_GROUP,
@@ -142,20 +133,17 @@
                 },
                 global: {
                     attach: function () {
-                        var isAttached  = flex.overhead.globaly.get(settings.GLOBAL_GROUP, settings.GLOBAL_EVENT_FLAG),
-                            DOMEvents   = events.DOMEvents();
+                        var isAttached  = flex.overhead.globaly.get(settings.GLOBAL_GROUP, settings.GLOBAL_EVENT_FLAG);
                         if (isAttached !== true) {
                             flex.overhead.globaly.set(settings.GLOBAL_GROUP, settings.GLOBAL_EVENT_FLAG, true);
-                            DOMEvents.add(
-                                window,
+                            _node(window).events().add(
                                 'mousemove',
                                 function (event) {
                                     render.move(event);
                                 },
                                 settings.GLOBAL_EVENT_ID
                             );
-                            DOMEvents.add(
-                                window,
+                            _node(window).events().add(
                                 'mouseup',
                                 function (event) {
                                     render.stop(event);
@@ -166,7 +154,7 @@
                     }
                 }
             };
-            coreEvents = {
+            coreEvents  = {
                 attach: function (container, id) {
                     flex.events.core.listen(
                         flex.registry.events.ui.window.maximize.GROUP,
@@ -201,10 +189,30 @@
                     return false;
                 }
             };
-            privates    = {
+            patterns    = {
+                attach: function () {
+                    flex.events.core.listen(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, function (nodes) {
+                        var context = nodes.length !== void 0 ? (nodes.length > 0 ? nodes[0].parentNode : null) : null;
+                        if (context !== null) {
+                            if (_node('*[' + settings.CONTAINER + ']:not([' + settings.INITED + '])', false, context).target !== null) {
+                                init();
+                            }
+                        }
+                    });
+                }
+            };
+            privates = {
                 init : init
             };
             render.global.attach();
+            patterns.attach();
+            //Init modules
+            if (flex.libraries !== void 0) {
+                if (flex.libraries.events !== void 0 && flex.libraries.html !== void 0) {
+                    flex.libraries.events.create();
+                    flex.libraries.html.create();
+                }
+            }
             return {
                 init : privates.init
             };

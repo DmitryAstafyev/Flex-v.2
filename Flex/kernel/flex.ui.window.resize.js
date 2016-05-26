@@ -22,12 +22,10 @@
              * For example container has top:50% from parent. In this case you should define such parent by next mark
              * data-flex-ui-window-resize-position-parent="id"
              * */
-            var //Get modules
-                html            = flex.libraries.html.create(),
-                events          = flex.libraries.events.create(),
-                //Variables
+            var //Variables
                 privates        = null,
                 render          = null,
+                patterns        = null,
                 coreEvents      = null,
                 settings        = null;
             settings = {
@@ -50,9 +48,8 @@
                 STATE_STORAGE       : 'flex-window-resize-instance-state',
             };
             function init(id) {
-                var selector    = new html.select.bySelector(),
-                    id          = id || null,
-                    containers  = selector.all('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']:not([' + settings.INITED + '])');
+                var id          = id || null,
+                    containers  = _nodes('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']:not([' + settings.INITED + '])').target;
                 if (containers !== null) {
                     Array.prototype.forEach.call(
                         containers,
@@ -73,12 +70,10 @@
                     );
                 }
             };
-            render      = {
+            render          = {
                 position    : {
                     getParent : function(id){
-                        var selector    = new html.select.bySelector(),
-                            parent      = selector.first('*[' + settings.POSITION_PARENT + '="' + id + '"' + ']');
-                        return parent;
+                        return _node('*[' + settings.POSITION_PARENT + '="' + id + '"' + ']').target;
                     }
                 },
                 hooks       : {
@@ -91,8 +86,7 @@
                         return node;
                     },
                     get     : function (id, container, hook) {
-                        var selector    = new html.select.bySelector(),
-                            hooks       = selector.all('*[' + settings.CONTAINER + '="' + id + '"' + '][' + settings.HOOK + '="' + hook + '"' + ']:not([' + settings.INITED + '])');
+                        var hooks = _nodes('*[' + settings.CONTAINER + '="' + id + '"' + '][' + settings.HOOK + '="' + hook + '"' + ']:not([' + settings.INITED + '])').target;
                         if (hooks.length === 0) {
                             hooks = [];
                             hooks.push(render.hooks.make(container, hook));
@@ -101,13 +95,11 @@
                     }
                 },
                 attach  : function (container, hooks, direction, id) {
-                    var DOMEvents       = events.DOMEvents(),
-                        position_parent = render.position.getParent(id);
+                    var position_parent = render.position.getParent(id);
                     Array.prototype.forEach.call(
                         hooks,
                         function (hook) {
-                            DOMEvents.add(
-                                hook,
+                            _node(hook).events().add(
                                 'mousedown',
                                 function (event) {
                                     render.start(event, container, hook, direction, position_parent, id);
@@ -129,20 +121,14 @@
                         }
                         return null;
                     }
-                    var possition   = null,
-                        scroll      = null,
-                        sizes       = null,
-                        size        = null,
+                    var size        = null,
                         pos         = null,
                         scrl        = null,
                         isFixed     = null;
                     if (flex.overhead.objecty.get(container, settings.STATE_STORAGE, false, false) === false) {
-                        possition   = html.position();
-                        scroll      = html.scroll();
-                        sizes       = html.size();
-                        size        = sizes.node(container);
-                        pos         = possition.byPage(position_parent !== null ? position_parent : container);
-                        scrl        = scroll.get(container.parentNode);
+                        size        = _node(container).html().size().get();
+                        pos         = _node(position_parent !== null ? position_parent : container).html().position().byPage();
+                        scrl        = _node(container.parentNode).html().scroll().position();
                         isFixed     = getPosition(container) !== 'fixed' ? false : true;
                         flex.overhead.globaly.set(
                             settings.GLOBAL_GROUP,
@@ -236,20 +222,17 @@
                 },
                 global: {
                     attach: function () {
-                        var isAttached  = flex.overhead.globaly.get(settings.GLOBAL_GROUP, settings.GLOBAL_EVENT_FLAG),
-                            DOMEvents   = events.DOMEvents();
+                        var isAttached  = flex.overhead.globaly.get(settings.GLOBAL_GROUP, settings.GLOBAL_EVENT_FLAG);
                         if (isAttached !== true) {
                             flex.overhead.globaly.set(settings.GLOBAL_GROUP, settings.GLOBAL_EVENT_FLAG, true);
-                            DOMEvents.add(
-                                window,
+                            _node(window).events().add(
                                 'mousemove',
                                 function (event) {
                                     render.move(event);
                                 },
                                 settings.GLOBAL_EVENT_ID
                             );
-                            DOMEvents.add(
-                                window,
+                            _node(window).events().add(
                                 'mouseup',
                                 function (event) {
                                     render.stop(event);
@@ -295,10 +278,30 @@
                     return false;
                 }
             };
+            patterns        = {
+                attach: function () {
+                    flex.events.core.listen(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, function (nodes) {
+                        var context = nodes.length !== void 0 ? (nodes.length > 0 ? nodes[0].parentNode : null) : null;
+                        if (context !== null) {
+                            if (_node('*[' + settings.CONTAINER + ']:not([' + settings.INITED + '])', false, context).target !== null) {
+                                init();
+                            }
+                        }
+                    });
+                }
+            };
             privates = {
                 init : init
             };
             render.global.attach();
+            patterns.attach();
+            //Init modules
+            if (flex.libraries !== void 0) {
+                if (flex.libraries.events !== void 0 && flex.libraries.html !== void 0) {
+                    flex.libraries.events.create();
+                    flex.libraries.html.create();
+                }
+            }
             return {
                 init : privates.init
             };

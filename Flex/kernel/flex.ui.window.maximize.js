@@ -16,15 +16,13 @@
         var protofunction = function () { };
         protofunction.prototype = function () {
             /* Description
-            * data-flex-ui-window-move-container
-            * data-flex-ui-window-move-hook
+            * data-flex-ui-window-maximize
+            * data-flex-window-maximize-hook
             * */
-            var //Get modules
-                html            = flex.libraries.html.create(),
-                events          = flex.libraries.events.create(),
-                //Variables
+            var //Variables
                 privates        = null,
                 global          = null,
+                patterns        = null,
                 processing      = null,
                 settings        = null;
             settings = {
@@ -35,9 +33,8 @@
                 STORAGE             : 'flex-window-maximize-storage',
             };
             function init(id) {
-                var selector    = new html.select.bySelector(),
-                    id          = id || null,
-                    containers  = selector.all('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']:not([' + settings.INITED + '])');
+                var id          = id || null,
+                    containers  = _nodes('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']:not([' + settings.INITED + '])').target;
                 if (containers !== null) {
                     Array.prototype.forEach.call(
                         containers,
@@ -45,7 +42,7 @@
                             var id      = container.getAttribute(settings.CONTAINER),
                                 hooks   = null;
                             if (id !== '' && id !== null) {
-                                hooks = selector.all('*[' + settings.HOOK + '="' + id + '"]');
+                                hooks = _nodes('*[' + settings.HOOK + '="' + id + '"]').target;
                                 if (hooks !== null) {
                                     processing.attach(container, hooks, id);
                                 }
@@ -59,12 +56,10 @@
             };
             processing = {
                 attach  : function (container, hooks, id) {
-                    var DOMEvents = events.DOMEvents();
                     Array.prototype.forEach.call(
                         hooks,
                         function (hook, index) {
-                            DOMEvents.add(
-                                hook,
+                            _node(hook).events().add(
                                 'click',
                                 function (event) {
                                     processing.onClick(event, container, id);
@@ -146,12 +141,11 @@
                     },
                     byID : {
                         findByID: function (id) {
-                            var selector    = new html.select.bySelector(),
-                                id          = id || null,
+                            var id          = id || null,
                                 containers  = null,
                                 result      = [];
                             if (id !== null) {
-                                containers = selector.all('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']');
+                                containers = _nodes('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']').target;
                                 if (containers !== null) {
                                     if (containers.length > 0) {
                                         Array.prototype.forEach.call(containers, function (container) {
@@ -188,7 +182,26 @@
                     }
                 }
             };
-            privates    = {
+            patterns = {
+                attach: function () {
+                    flex.events.core.listen(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, function (nodes) {
+                        var context = nodes.length !== void 0 ? (nodes.length > 0 ? nodes[0].parentNode : null) : null;
+                        if (context !== null) {
+                            if (_node('*[' + settings.CONTAINER + ']:not([' + settings.INITED + '])', false, context).target !== null) {
+                                init();
+                            }
+                        }
+                    });
+                }
+            };
+            //Init modules
+            if (flex.libraries !== void 0) {
+                if (flex.libraries.events !== void 0) {
+                    flex.libraries.events.create();
+                }
+            }
+            patterns.attach();
+            privates = {
                 init    : init,
                 maximaze: processing.actions.byID.maximaze,
                 restore : processing.actions.byID.restore,
@@ -204,7 +217,6 @@
             protofunction   : protofunction,
             reference       : function () {
                 flex.libraries.events   ();
-                flex.libraries.html     ();
             }
         });
     }

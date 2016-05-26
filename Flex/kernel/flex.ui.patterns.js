@@ -42,7 +42,7 @@
                     USE_STORAGE_CSS : true,
                     USE_STORAGE_JS  : true,
                     USE_STORAGE_HTML: true,
-                    PATTERN_NODE    : 'pattern'
+                    PATTERN_NODE    : 'pattern',
                 },
                 validator   : {
                     USE_STORAGE_CSS : function (value) { return typeof value === 'boolean' ? true : false;},
@@ -2353,6 +2353,7 @@
                                 }
                             });
                         }
+                        flex.events.core.fire(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, privates.nodes);
                     };
                     returning   = {
                         nodes           : function () { return privates.nodes;          },
@@ -2614,7 +2615,7 @@
             };
             //END: caller class ===============================================
             layout      = {
-                init    : function(is_auto){
+                init    : function (is_auto){
                     function isValid(pattern) {
                         var nodeName = pattern.parentNode.nodeName.toLowerCase();
                         if (nodeName !== config.values.PATTERN_NODE) {
@@ -2719,6 +2720,15 @@
                         }
                     }
                     return _caller;
+                },
+                attach  : function () {
+                    if (document.readyState !== 'complete') {
+                        flex.events.DOM.add(window, 'load', function () {
+                            layout.init(true);
+                        });
+                    } else {
+                        layout.init(true);
+                    }
                 }
             };
             controllers = {
@@ -2999,7 +3009,7 @@
             window['_controller'] = privates.controller.attach;
             window['_conditions'] = privates.conditions.attach;
             //Run layout parser
-            layout.init(true);
+            layout.attach();
             //Public part
             return {
                 preload : privates.preload,

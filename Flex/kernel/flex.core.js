@@ -4883,7 +4883,7 @@
                             }
                         } else {
                             if (selector !== void 0) {
-                                if (typeof selector.nodeName === 'string') {
+                                if (typeof selector.nodeName === 'string' || selector == window) {
                                     return new wrappers.constructors.node(selector);
                                 }
                             }

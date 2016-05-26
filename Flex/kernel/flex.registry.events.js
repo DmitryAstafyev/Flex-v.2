@@ -46,6 +46,10 @@
                         RESTORED    : 'restored',
                         CHANGE      : 'change',
                     }
+                },
+                patterns: {
+                    GROUP   : 'flex.ui.patterns',
+                    MOUNTED : 'mounted',
                 }
             },
             /// <field type = 'object'>Events of Flex (system events)</field>

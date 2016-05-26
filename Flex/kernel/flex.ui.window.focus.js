@@ -16,17 +16,15 @@
         var protofunction = function () { };
         protofunction.prototype = function () {
             /* Description
-            * data-flex-ui-window-move-container
+            * data-flex-ui-window-focus
             * data-flex-ui-window-move-hook
             * */
-            var //Get modules
-                html            = flex.libraries.html.create(),
-                events          = flex.libraries.events.create(),
-                //Variables
+            var //Variables
                 privates        = null,
                 global          = null,
                 processing      = null,
-                settings        = null;
+                settings        = null,
+                patterns        = null;
             settings = {
                 CONTAINER           : 'data-flex-ui-window-focus',
                 INITED              : 'data-flex-window-focus-inited',
@@ -37,9 +35,8 @@
                 FOCUSED_ZINDEX      : 1000
             };
             function init(id) {
-                var selector    = new html.select.bySelector(),
-                    id          = id || null,
-                    containers  = selector.all('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']:not([' + settings.INITED + '])');
+                var id          = id || null,
+                    containers  = _nodes('*[' + settings.CONTAINER + (id !== null ? '="' + id + '"' : '') + ']:not([' + settings.INITED + '])').target;
                 if (containers !== null) {
                     Array.prototype.forEach.call(
                         containers,
@@ -53,14 +50,12 @@
                     );
                 }
             };
-            global = {
+            global      = {
                 attach: function () {
-                    var isAttached  = flex.overhead.globaly.get(settings.GLOBAL_GROUP, settings.GLOBAL_EVENT_FLAG),
-                        DOMEvents   = events.DOMEvents();
+                    var isAttached  = flex.overhead.globaly.get(settings.GLOBAL_GROUP, settings.GLOBAL_EVENT_FLAG);
                     if (isAttached !== true) {
                         flex.overhead.globaly.set(settings.GLOBAL_GROUP, settings.GLOBAL_EVENT_FLAG, true);
-                        DOMEvents.add(
-                            window,
+                        _node(window).events().add(
                             'click',
                             function (event) {
                                 processing.onClick(event);
@@ -71,10 +66,9 @@
                     }
                 },
             };
-            processing = {
+            processing  = {
                 getContainer    : function(node){
-                    var find        = html.find(),
-                        id          = null,
+                    var id          = null,
                         container   = null;
                     if (typeof node.getAttribute === 'function') {
                         id = node.getAttribute(settings.CONTAINER);
@@ -85,7 +79,7 @@
                             };
                         }
                     }
-                    container = find.parentByAttr(node, { name: settings.CONTAINER, value: null });
+                    container = _node(node).html().find().parentByAttr({ name: settings.CONTAINER, value: null });
                     if (container !== null) {
                         return {
                             container   : container,
@@ -122,8 +116,7 @@
                 },
                 focus           : {
                     zIndex  : function(id, value){
-                        var selector    = html.select.bySelector(),
-                            container   = selector.first('*[' + settings.CONTAINER + '="' + id + '"' + ']');
+                        var container   = _node('*[' + settings.CONTAINER + '="' + id + '"' + ']').target;
                         if (container !== null) {
                             container.style.zIndex = value;
                         }
@@ -138,10 +131,30 @@
                     },
                 },
             };
+            patterns    = {
+                attach: function () {
+                    flex.events.core.listen(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, function (nodes) {
+                        var context = nodes.length !== void 0 ? (nodes.length > 0 ? nodes[0].parentNode : null) : null;
+                        if (context !== null) {
+                            if (_node('*[' + settings.CONTAINER + ']:not([' + settings.INITED + '])', false, context).target !== null) {
+                                init();
+                            }
+                        }
+                    });
+                }
+            };
             privates    = {
                 init : init
             };
             global.attach();
+            patterns.attach();
+            //Init modules
+            if (flex.libraries !== void 0) {
+                if (flex.libraries.events !== void 0 && flex.libraries.html !== void 0) {
+                    flex.libraries.events.create();
+                    flex.libraries.html.create();
+                }
+            }
             return {
                 init : privates.init
             };
