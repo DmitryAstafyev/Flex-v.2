@@ -1562,6 +1562,16 @@
                         },
                         update      : function (clone) {
                             function bind(group, binds) {
+                                function correctStyle(prop) {
+                                    var result = '';
+                                    prop.split('-').forEach(function (part, index) {
+                                        if (index > 0) {
+                                            part = String.prototype.toUpperCase.apply(part.charAt(0)) + part.substr(1, part.length - 1);
+                                        }
+                                        result += part;
+                                    });
+                                    return result;
+                                };
                                 function executeHandles(handles, _this, arg_1, arg_2) {
                                     var state_code = arg_1 + arg_2;
                                     if (handles instanceof Array) {
@@ -1592,7 +1602,7 @@
                                                     executeHandles(handles, this, prop, current);
                                                 }
                                             });
-                                        }(binds, key, node.node, node.style, group[key].handles));
+                                        }(binds, key, node.node, correctStyle(node.style), group[key].handles));
                                     }
                                     if (helpers.binds.isPossible(node.node, prop)) {
                                         (function (binds, key, node, attr_name, handles) {
@@ -1648,7 +1658,7 @@
                                                     executeHandles(handles, node.style, prop, current);
                                                 }
                                             });
-                                        }(binds, key, node.node, node.style, group[key].handles));
+                                        }(binds, key, node.node, correctStyle(node.style), group[key].handles));
                                     }
                                     if (node.prop !== null) {
                                         if (node.node[prop] !== void 0) {
