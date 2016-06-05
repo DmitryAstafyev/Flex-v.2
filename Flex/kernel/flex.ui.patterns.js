@@ -800,11 +800,15 @@
                                                     }
                                                     node.removeAttribute(attr.nodeName);
                                                     if (node[attr.nodeName] !== void 0) {
-                                                        node[attr.nodeName] = null;
+                                                        try {
+                                                            node[attr.nodeName] = null;
+                                                        } catch (e) { }
                                                         //IE 11 fix
                                                         defaultIEFix = 'default' + attr.nodeName[0].toUpperCase() + attr.nodeName.substr(1, attr.nodeName.length - 1);
                                                         if (node[defaultIEFix] !== void 0) {
-                                                            node[defaultIEFix] = '';
+                                                            try {
+                                                                node[defaultIEFix] = '';
+                                                            } catch (e) { }
                                                         }
                                                     }
                                                 }
