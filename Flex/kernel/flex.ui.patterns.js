@@ -658,9 +658,9 @@
                                     var reg_hook = reg_hook instanceof RegExp ? reg_hook : new RegExp(settings.regs.HOOK_OPEN + hook + settings.regs.HOOK_CLOSE, 'gi');
                                     if (node.attributes) {
                                         Array.prototype.forEach.call(node.attributes, function (attr) {
-                                            if (typeof attr.nodeValue === 'string' && attr.nodeValue !== '') {
-                                                if (helpers.testReg(reg_hook, attr.nodeValue)) {
-                                                    node.setAttribute(attr.nodeName, attr.nodeValue.replace(reg_hook, '{{' + hook + '_attr' + '}}'));
+                                            if (typeof attr.value === 'string' && attr.value !== '') {
+                                                if (helpers.testReg(reg_hook, attr.value)) {
+                                                    node.setAttribute(attr.nodeName, attr.value.replace(reg_hook, '{{' + hook + '_attr' + '}}'));
                                                     storage.push(convert.hooks.setters.attrSetter(
                                                         new RegExp(settings.regs.HOOK_OPEN + hook + '_attr' + settings.regs.HOOK_CLOSE, 'gi'),
                                                         node,
@@ -693,7 +693,7 @@
                                                     _node = document.createElement(settings.compatibility.CHILD_TO_PARENT[tag]);
                                                     if (node.attributes !== void 0 && node.attributes !== null && node.attributes.length !== void 0) {
                                                         Array.prototype.forEach.call(node.attributes, function (attr) {
-                                                            _node.setAttribute(attr.nodeName, attr.nodeValue);
+                                                            _node.setAttribute(attr.nodeName, attr.value);
                                                         });
                                                     }
                                                     _node.innerHTML = value;
@@ -788,10 +788,10 @@
                                     if (node.attributes) {
                                         Array.prototype.forEach.call(node.attributes, function (attr) {
                                             var defaultIEFix = null;
-                                            if (typeof attr.nodeValue === 'string' && attr.nodeValue !== '') {
-                                                if (helpers.testReg(reg_model, attr.nodeValue)) {
+                                            if (typeof attr.value === 'string' && attr.value !== '') {
+                                                if (helpers.testReg(reg_model, attr.value)) {
                                                     if (attr.nodeName === 'style') {
-                                                        convert.model.find.inStyles(node, attr.nodeValue);
+                                                        convert.model.find.inStyles(node, attr.value);
                                                     } else {
                                                         convert.model.setAttrData(node, {
                                                             attr    : attr.nodeName,
