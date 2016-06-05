@@ -165,6 +165,10 @@
                         HOOK_WRAPPERS: '.flex_patterns_hook_wrapper'
                     },
                 },
+                serialize: [
+                    [/</gi, '&lt;'],
+                    [/>/gi, '&gt;'],
+                ],
                 other           : {
                     INDEXES     : '__indexes'
                 }
@@ -800,7 +804,7 @@
                                                     }
                                                     node.removeAttribute(attr.nodeName);
                                                     if (node[attr.nodeName] !== void 0) {
-                                                        try {
+                                                        try{
                                                             node[attr.nodeName] = null;
                                                         } catch (e) { }
                                                         //IE 11 fix
@@ -1564,8 +1568,17 @@
                             }
                             return model.current.binds;
                         },
-                        update      : function (clone) {
+                        update      : function (clone, _serialize) {
                             function bind(group, binds) {
+                                function serialize(value) {
+                                    var result = value;
+                                    if (_serialize) {
+                                        settings.serialize.forEach(function (pear) {
+                                            result = result.replace(pear[0], pear[1]);
+                                        });
+                                    }
+                                    return result;
+                                };
                                 function correctStyle(prop) {
                                     var result = '';
                                     prop.split('-').forEach(function (part, index) {
@@ -1636,7 +1649,8 @@
                                         (function (binds, key, node, attr_name, handles) {
                                             binds[key] = node.getAttribute(attr_name);
                                             _object(binds).binding().bind(key, function (current, previous) {
-                                                var execute = false;
+                                                var execute = false,
+                                                    current = serialize(current);
                                                 if (node.getAttribute(attr_name) !== current) {
                                                     node.setAttribute(attr_name, current);
                                                     execute = true;
@@ -1657,6 +1671,7 @@
                                         (function (binds, key, node, prop, handles) {
                                             binds[key] = node.style[prop];
                                             _object(binds).binding().bind(key, function (current, previous) {
+                                                var current = serialize(current);
                                                 if (node.style[prop] !== current) {
                                                     node.style[prop] = current;
                                                     executeHandles(handles, node.style, prop, current);
@@ -1669,6 +1684,7 @@
                                             (function (binds, key, node, prop, handles) {
                                                 binds[key] = node[prop];
                                                 _object(binds).binding().bind(key, function (current, previous) {
+                                                    var current = serialize(current);
                                                     if (node[prop] !== current) {
                                                         node[prop] = current;
                                                         executeHandles(handles, node, prop, current);
@@ -2020,7 +2036,7 @@
                         },
                     };
                     methods     = {
-                        build       : function (_hooks, _resources, _conditions) {
+                        build       : function (_hooks, _resources, _conditions, _serialize) {
                             var nodes           = [],
                                 _map            = [],
                                 _binds          = [],
@@ -2043,7 +2059,7 @@
                                     dom.        iteration();
                                     hooks.      apply(_hooks, clone.setters, hooks_map);
                                     map.        update(clone.clone);
-                                    model.      update(clone.clone);
+                                    model.      update(clone.clone, _serialize);
                                     model.      clear(clone.clone);
                                     dom.        update(clone.dom);
                                     nodes           = nodes.concat(Array.prototype.filter.call(clone.clone.childNodes, function () { return true; }));
@@ -2076,9 +2092,9 @@
                                 });
                             }
                         },
-                        bind        : function (hooks, resources, conditions) {
+                        bind        : function (hooks, resources, conditions, serialize) {
                             return function () {
-                                return methods.build(hooks, resources, conditions);
+                                return methods.build(hooks, resources, conditions, serialize);
                             };
                         }
                     };
@@ -2472,7 +2488,7 @@
                                     throw logs.caller.CANNOT_GET_CHILD_PATTERN;
                                 } else {
                                     hooks.apply(_hooks);
-                                    return _instance.bind(_hooks, value.resources(), value.conditions());
+                                    return _instance.bind(_hooks, value.resources(), value.conditions(), value.serialize());
                                 }
                             }
                         },
@@ -2522,7 +2538,7 @@
                                     hooks.apply();
                                     privates.pattern        = instance.init(self.url);
                                     if (privates.pattern !== null) {
-                                        privates.pattern    = privates.pattern.build(privates.hooks, privates.resources, privates.conditions);
+                                        privates.pattern    = privates.pattern.build(privates.hooks, privates.resources, privates.conditions, privates.serialize);
                                         if (privates.pattern instanceof settings.classes.RESULT) {
                                             privates.pattern.mount(privates.node, privates.before, privates.after, privates.replace);
                                             if (privates.callbacks.success !== null) {
@@ -2545,7 +2561,7 @@
                             hooks.apply();
                             privates.pattern = instance.init(self.url);
                             if (privates.pattern !== null) {
-                                privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions);
+                                privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions, privates.serialize);
                                 if (privates.pattern instanceof settings.classes.RESULT) {
                                     return privates.pattern;
                                 }
@@ -2557,14 +2573,16 @@
                     };
                     returning   = {
                         render      : render,
-                        hooks       : function () { return privates.hooks; },
-                        resources   : function () { return privates.resources;},
-                        conditions  : function () { return privates.conditions; }
-                };
+                        hooks       : function () { return privates.hooks;      },
+                        resources   : function () { return privates.resources;  },
+                        conditions  : function () { return privates.conditions; },
+                        serialize   : function () { return privates.serialize;  },
+                    };
                     return {
                         render      : returning.render,
                         hooks       : returning.hooks,
                         conditions  : returning.conditions,
+                        serialize   : returning.serialize,
                         resources   : returning.resources
                     };
                 },
@@ -2595,6 +2613,7 @@
                                                                 { name: 'conditions',           type: 'object',             value: null         },
                                                                 { name: 'callbacks',            type: 'object',             value: {}           },
                                                                 { name: 'resources',            type: 'object',             value: {}           },
+                                                                { name: 'serialize',            type: 'boolean',            value: true         },
                                                                 { name: 'remove_missing_hooks', type: 'boolean',            value: true         }]) !== false) {
                         flex.oop.objects.validate(parameters.callbacks, [   { name: 'before',   type: 'function', value: null },
                                                                             { name: 'success',  type: 'function', value: null },
@@ -2615,6 +2634,7 @@
                                 data                : parameters.data,
                                 conditions          : parameters.conditions,
                                 callbacks           : parameters.callbacks,
+                                serialize           : parameters.serialize,
                                 remove_missing_hooks: parameters.remove_missing_hooks,
                                 resources           : parameters.resources,
                                 //Local
