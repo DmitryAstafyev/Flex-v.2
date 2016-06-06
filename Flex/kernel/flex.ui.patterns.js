@@ -1572,7 +1572,7 @@
                             function bind(group, binds) {
                                 function serialize(value) {
                                     var result = value;
-                                    if (_serialize) {
+                                    if (_serialize && typeof value === 'string') {
                                         settings.serialize.forEach(function (pear) {
                                             result = result.replace(pear[0], pear[1]);
                                         });
@@ -1649,14 +1649,13 @@
                                         (function (binds, key, node, attr_name, handles) {
                                             binds[key] = node.getAttribute(attr_name);
                                             _object(binds).binding().bind(key, function (current, previous) {
-                                                var execute = false,
-                                                    current = serialize(current);
-                                                if (node.getAttribute(attr_name) !== current) {
+                                                var execute = false;
+                                                if (node.getAttribute(attr_name) !== current && serialize(node.getAttribute(attr_name)) !== current) {
                                                     node.setAttribute(attr_name, current);
                                                     execute = true;
                                                 }
                                                 if (node[attr_name] !== void 0) {
-                                                    if (node[attr_name] !== current) {
+                                                    if (node[attr_name] !== current && serialize(node[attr_name]) !== current) {
                                                         node[attr_name] = current;
                                                         execute = true;
                                                     }
