@@ -66,6 +66,9 @@
                     config.values.USE_STORAGE_CSS   = false;
                     config.values.USE_STORAGE_JS    = false;
                     config.values.USE_STORAGE_HTML  = false;
+                    flex.config.set({
+                        SHOWN_LOGS: ['CRITICAL', 'LOGICAL', 'WARNING', 'NOTIFICATION', 'LOGS']
+                    });
                 }
             };
             //Settings
@@ -165,10 +168,6 @@
                         HOOK_WRAPPERS: '.flex_patterns_hook_wrapper'
                     },
                 },
-                serialize: [
-                    [/</gi, '&lt;'],
-                    [/>/gi, '&gt;'],
-                ],
                 other           : {
                     INDEXES     : '__indexes'
                 }
@@ -597,6 +596,7 @@
                                     });
                                     return hooks;
                                 }
+                                return [];
                             },
                             wrap        : function (target_node) {
                                 function wrapHook(node) {
@@ -763,7 +763,7 @@
                             },
                             setAttrData : function(node, model_item){
                                 var model = node.getAttribute(settings.css.attrs.MODEL_DATA);
-                                model       = typeof model === 'string' ? (model !== '' ? JSON.parse(model) : []) : [];
+                                model = typeof model === 'string' ? (model !== '' ? JSON.parse(model) : []) : [];
                                 model.push(model_item);
                                 node.setAttribute(settings.css.attrs.MODEL_DATA, JSON.stringify(model));
                             },
@@ -852,11 +852,11 @@
                                                 } else if (typeof childNode.nodeValue === 'string') {
                                                     if (helpers.testReg(reg_model, childNode.nodeValue)) {
                                                         validatePlaceHolder(node, model);
+                                                        childNode.nodeValue = flex.unique();
                                                         convert.model.setAttrData(node, {
-                                                            prop    : 'innerHTML',
-                                                            model   : model
+                                                            model   : model,
+                                                            text    : childNode.nodeValue
                                                         });
-                                                        childNode.parentNode.removeChild(childNode);
                                                     }
                                                 }
                                             });
@@ -967,53 +967,11 @@
                                         }
                                     };
                                     function getAppend(node) {
-                                        var _node   = node,
-                                            result  = null,
-                                            next    = null,
-                                            in_con  = convert.conditions.getName(node.nodeValue).name;
-                                        add(node);
-                                        do {
-                                            next = node.nextSibling !== void 0 ? node.nextSibling : null;
-                                            if (next !== null) {
-                                                if (next.nodeType === 8 && helpers.testReg(settings.regs.CONDITION_STRUCTURE, next.nodeValue)) {
-                                                    in_con  = convert.conditions.getName(next.nodeValue).name;
-                                                    node    = next;
-                                                    add(next);
-                                                } else if (in_con !== false && next.nodeType === 8 && next.nodeValue === in_con) {
-                                                    in_con  = false;
-                                                    node    = next;
-                                                    add(next);
-                                                } else if (!in_con && next.nodeType !== 8) {
-                                                    if (next.nodeType === 3 && next.nodeValue.replace(/\s|\r|\n|\t/gi, '') === ''){
-                                                        node = next;
-                                                    } else {
-                                                        _node   = node;
-                                                        result  = function append(node) {
-                                                            if (_node.parentNode !== null) {
-                                                                if (_node.nextSibling !== null){
-                                                                    _node.parentNode.insertBefore(node, _node.nextSibling);
-                                                                } else {
-                                                                    _node.parentNode.appendChild(node);
-                                                                }
-                                                                return true;
-                                                            } else {
-                                                                return false;
-                                                            }
-                                                        };
-                                                    }
-                                                } else {
-                                                    node = next;
-                                                }
-                                            } else {
-                                                _node   = _node.parentNode;
-                                                result  = function append(node) {
-                                                    _node.appendChild(node);
-                                                    return true;
-                                                };
-                                            }
-                                            
-                                        } while (result === null);
-                                        return result;
+                                        var placeholder = document.createTextNode('');
+                                        node.parentNode.insertBefore(placeholder, node);
+                                        return function (_node) {
+                                            placeholder.parentNode.insertBefore(_node, placeholder);
+                                        };
                                     };
                                     var _comments = [];
                                     _object(conditions).forEach(function (con_name, con_value) {
@@ -1158,7 +1116,7 @@
                                             return included;
                                         }(conditions_dom[con_name]));
                                         if (!found_flag) {
-                                            flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_VALUE + ' (condition name: ' + con_name + ' = "' + con_value + '")', flex.logs.types.WARNING);
+                                            flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_VALUE + ' (condition name: ' + con_name + ' = "' + con_value + '")', flex.logs.types.NOTIFICATION);
                                         }
                                     } else {
                                         flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_NODES + ' (condition name: ' + con_name + ')', flex.logs.types.WARNING);
@@ -1546,39 +1504,51 @@
                         current     : null,
                         model       : null,
                         binds       : null,
-                        map         : function (clone) {
+                        map         : function (clone, defaults) {
                             var model_nodes = _nodes('*[' + settings.css.attrs.MODEL_DATA + ']', false, clone).target;
+                            //Add models, which binded with nodes
                             if (model_nodes.length > 0) {
                                 Array.prototype.forEach.call(model_nodes, function (model_node) {
                                     var models = JSON.parse(model_node.getAttribute(settings.css.attrs.MODEL_DATA));
                                     if (models instanceof Array) {
                                         models.forEach(function (_model) {
+                                            var textNode = null;
                                             if (model.current.binds[_model.model] === void 0) {
                                                 model.current.binds[_model.model] = [];
                                             }
-                                            model.current.binds[_model.model].push({
-                                                node    : model_node,
-                                                attr    : _model.attr   === void 0 ? null : _model.attr,
-                                                prop    : _model.prop   === void 0 ? null : _model.prop,
-                                                style   : _model.style  === void 0 ? null : _model.style,
-                                            });
+                                            if (_model.text !== void 0) {
+                                                textNode = helpers.getTextNode(model_node, _model.text);
+                                                if (textNode !== null) {
+                                                    textNode.nodeValue = defaults[_model.model] !== void 0 ? defaults[_model.model] : '';
+                                                    model.current.binds[_model.model].push({
+                                                        node    : textNode,
+                                                        attr    : null,
+                                                        prop    : 'nodeValue',
+                                                        style   : null
+                                                    });
+                                                }
+                                            } else {
+                                                model.current.binds[_model.model].push({
+                                                    node    : model_node,
+                                                    attr    : _model.attr   === void 0 ? null : _model.attr,
+                                                    prop    : _model.prop   === void 0 ? null : _model.prop,
+                                                    style   : _model.style  === void 0 ? null : _model.style,
+                                                });
+                                            }
                                         });
                                     }
                                 });
                             }
+                            //Add models, which doesn't binded with nodes
+                            _object(defaults).forEach(function (name, value) {
+                                if (model.current.binds[name] === void 0) {
+                                    model.current.binds[name] = value;
+                                }
+                            });
                             return model.current.binds;
                         },
-                        update      : function (clone, _serialize) {
+                        update      : function (clone, defaults) {
                             function bind(group, binds) {
-                                function serialize(value) {
-                                    var result = value;
-                                    if (_serialize && typeof value === 'string') {
-                                        settings.serialize.forEach(function (pear) {
-                                            result = result.replace(pear[0], pear[1]);
-                                        });
-                                    }
-                                    return result;
-                                };
                                 function correctStyle(prop) {
                                     var result = '';
                                     prop.split('-').forEach(function (part, index) {
@@ -1600,7 +1570,7 @@
                                         });
                                     }
                                 };
-                                function income(key, node, binds, group, prop) {
+                                function income(key, node, binds, handles, prop) {
                                     if (node.attr !== null) {
                                         (function (binds, key, node, attr_name, handles) {
                                             _node(node).bindingAttrs().bind(attr_name, function (attr_name, current, previous) {
@@ -1609,7 +1579,7 @@
                                                     executeHandles(handles, this, attr_name, current);
                                                 }
                                             });
-                                        }(binds, key, node.node, node.attr, group[key].handles));
+                                        }(binds, key, node.node, node.attr, handles));
                                     }
                                     if (node.style !== null) {
                                         (function (binds, key, node, prop, handles) {
@@ -1619,7 +1589,7 @@
                                                     executeHandles(handles, this, prop, current);
                                                 }
                                             });
-                                        }(binds, key, node.node, correctStyle(node.style), group[key].handles));
+                                        }(binds, key, node.node, correctStyle(node.style), handles));
                                     }
                                     if (helpers.binds.isPossible(node.node, prop)) {
                                         (function (binds, key, node, attr_name, handles) {
@@ -1630,7 +1600,7 @@
                                                     executeHandles(handles, this, attr_name, current);
                                                 }
                                             });
-                                        }(binds, key, node.node, node.attr, group[key].handles));
+                                        }(binds, key, node.node, node.attr, handles));
                                     } else {
                                         if (node.prop !== null) {
                                             (function (binds, key, node, prop, handles) {
@@ -1640,22 +1610,22 @@
                                                         executeHandles(handles, this, prop, current);
                                                     }
                                                 });
-                                            }(binds, key, node.node, node.prop, group[key].handles));
+                                            }(binds, key, node.node, node.prop, handles));
                                         }
                                     }
                                 };
-                                function outcome(key, node, binds, group, prop) {
+                                function outcome(key, node, binds, handles, prop) {
                                     if (node.attr !== null) {
                                         (function (binds, key, node, attr_name, handles) {
                                             binds[key] = node.getAttribute(attr_name);
                                             _object(binds).binding().bind(key, function (current, previous) {
                                                 var execute = false;
-                                                if (node.getAttribute(attr_name) !== current && serialize(node.getAttribute(attr_name)) !== current) {
+                                                if (node.getAttribute(attr_name) !== current) {
                                                     node.setAttribute(attr_name, current);
                                                     execute = true;
                                                 }
                                                 if (node[attr_name] !== void 0) {
-                                                    if (node[attr_name] !== current && serialize(node[attr_name]) !== current) {
+                                                    if (node[attr_name] !== current) {
                                                         node[attr_name] = current;
                                                         execute = true;
                                                     }
@@ -1664,49 +1634,54 @@
                                                     executeHandles(handles, node, attr_name, current);
                                                 }
                                             });
-                                        }(binds, key, node.node, node.attr, group[key].handles));
+                                        }(binds, key, node.node, node.attr, handles));
                                     } 
                                     if (node.style !== null) {
                                         (function (binds, key, node, prop, handles) {
                                             binds[key] = node.style[prop];
                                             _object(binds).binding().bind(key, function (current, previous) {
-                                                var current = serialize(current);
                                                 if (node.style[prop] !== current) {
                                                     node.style[prop] = current;
                                                     executeHandles(handles, node.style, prop, current);
                                                 }
                                             });
-                                        }(binds, key, node.node, correctStyle(node.style), group[key].handles));
+                                        }(binds, key, node.node, correctStyle(node.style), handles));
                                     }
                                     if (node.prop !== null) {
                                         if (node.node[prop] !== void 0) {
                                             (function (binds, key, node, prop, handles) {
                                                 binds[key] = node[prop];
                                                 _object(binds).binding().bind(key, function (current, previous) {
-                                                    var current = serialize(current);
                                                     if (node[prop] !== current) {
                                                         node[prop] = current;
                                                         executeHandles(handles, node, prop, current);
                                                     }
                                                 });
-                                            }(binds, key, node.node, prop, group[key].handles));
+                                            }(binds, key, node.node, prop, handles));
                                         }
                                     }
                                 };
                                 if (group !== null) {
                                     _object(group).forEach(function (key, nodes) {
+                                        var handles = [];
                                         if (!helpers.testReg(settings.regs.GROUP_PROPERTY, key)) {
-                                            group[key].handles  = [];
-                                            binds[key]          = null;
+                                            binds[key] = null;
                                             if (nodes instanceof Array) {
                                                 nodes.forEach(function (node) {
                                                     var prop = node.prop !== null ? node.prop : node.attr;
                                                     node.node[settings.storage.NODE_BINDING_DATA] = {
                                                         outcome_call: false
                                                     };
-                                                    income  (key, node, binds, group, prop);
-                                                    outcome (key, node, binds, group, prop);
+                                                    income  (key, node, binds, handles, prop);
+                                                    outcome (key, node, binds, handles, prop);
                                                 });
+                                            } else {
+                                                (function (binds, key,  value, handles) {
+                                                    binds[key] = value;
+                                                    _object(binds).binding().bind(key, function (current, previous) {
+                                                        executeHandles(handles, null, null, current);
+                                                    });
+                                                }(binds, key, nodes, handles));
                                             }
                                             group[key] = {
                                                 addHandle   : function (handle) {
@@ -1726,7 +1701,7 @@
                                                         this.handles.splice(index, 1);
                                                     }
                                                 },
-                                                handles     : group[key].handles
+                                                handles     : handles
                                             };
                                             group[key].addHandle.   bind(group[key]);
                                             group[key].removeHandle.bind(group[key]);
@@ -1734,7 +1709,7 @@
                                     });
                                 }
                             };
-                            model.map(clone);
+                            model.map(clone, defaults);
                             bind(model.current.binds, model.current.model);
                             if (model.model === null) {
                                 model.model = {};
@@ -1781,6 +1756,15 @@
                                 binds : model.binds instanceof Array ? model.binds[model.binds.length - 1] : model.binds
                             };
                             return last;
+                        },
+                        getDefaults : function (_hooks, setters){
+                            var defaults = {};
+                            _object(_hooks).forEach(function (name, value) {
+                                if (setters[name] === void 0) {
+                                    defaults[name] = value;
+                                }
+                            });
+                            return defaults;
                         }
                     };
                     dom         = {
@@ -1965,37 +1949,35 @@
                                                                     data[data_name] = typeof data_value === 'function' ? data_value() : data_value;
                                                                 });
                                                                 result = _conditions[con_name](data);
-                                                                if (conditions_dom[con_name][result] !== void 0) {
-                                                                    if (conditions_dom[con_name].__included.length > 0) {
-                                                                        conditions_dom[con_name].__included.forEach(function (con_name) {
-                                                                            if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
-                                                                                if (_conditions[con_name].tracking !== void 0) {
-                                                                                    conditions_dom[con_name].__unblock();
-                                                                                }
+                                                                if (conditions_dom[con_name].__included.length > 0) {
+                                                                    conditions_dom[con_name].__included.forEach(function (con_name) {
+                                                                        if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
+                                                                            if (_conditions[con_name].tracking !== void 0) {
+                                                                                conditions_dom[con_name].__unblock();
                                                                             }
-                                                                        });
-                                                                    }
-                                                                    conditions_dom[con_name].__update(result);
-                                                                    if (conditions_dom[con_name][result].included.length > 0) {
-                                                                        conditions_dom[con_name][result].included.forEach(function (con_name) {
-                                                                            var res = null;
-                                                                            if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
-                                                                                if (_conditions[con_name].tracking !== void 0) {
-                                                                                    res = _conditions[con_name](data);
-                                                                                    conditions_dom[con_name].__update(res);
-                                                                                }
+                                                                        }
+                                                                    });
+                                                                }
+                                                                conditions_dom[con_name].__update(result);
+                                                                if (conditions_dom[con_name][result] !== void 0 && conditions_dom[con_name][result].included.length > 0) {
+                                                                    conditions_dom[con_name][result].included.forEach(function (con_name) {
+                                                                        var res = null;
+                                                                        if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
+                                                                            if (_conditions[con_name].tracking !== void 0) {
+                                                                                res = _conditions[con_name](data);
+                                                                                conditions_dom[con_name].__update(res);
                                                                             }
-                                                                        });
-                                                                    }
-                                                                    if (conditions_dom[con_name].__included.length > 0) {
-                                                                        conditions_dom[con_name].__included.forEach(function (con_name) {
-                                                                            if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
-                                                                                if (_conditions[con_name].tracking !== void 0) {
-                                                                                    conditions_dom[con_name].__block();
-                                                                                }
+                                                                        }
+                                                                    });
+                                                                }
+                                                                if (conditions_dom[con_name].__included.length > 0) {
+                                                                    conditions_dom[con_name].__included.forEach(function (con_name) {
+                                                                        if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
+                                                                            if (_conditions[con_name].tracking !== void 0) {
+                                                                                conditions_dom[con_name].__block();
                                                                             }
-                                                                        });
-                                                                    }
+                                                                        }
+                                                                    });
                                                                 }
                                                             };
                                                         }(_conditions, con_name, data, conditions_dom));
@@ -2035,7 +2017,7 @@
                         },
                     };
                     methods     = {
-                        build       : function (_hooks, _resources, _conditions, _serialize) {
+                        build       : function (_hooks, _resources, _conditions) {
                             var nodes           = [],
                                 _map            = [],
                                 _binds          = [],
@@ -2058,11 +2040,11 @@
                                     dom.        iteration();
                                     hooks.      apply(_hooks, clone.setters, hooks_map);
                                     map.        update(clone.clone);
-                                    model.      update(clone.clone, _serialize);
+                                    model.      update(clone.clone, model.getDefaults(_hooks, clone.setters));
                                     model.      clear(clone.clone);
                                     dom.        update(clone.dom);
-                                    nodes           = nodes.concat(Array.prototype.filter.call(clone.clone.childNodes, function () { return true; }));
                                     conditions_dom  = clone.applyConditions();
+                                    nodes           = nodes.concat(Array.prototype.filter.call(clone.clone.childNodes, function () { return true; }));
                                     condition.tracking(_conditions, conditions_dom, _hooks);
                                 });
                             }
@@ -2091,9 +2073,9 @@
                                 });
                             }
                         },
-                        bind        : function (hooks, resources, conditions, serialize) {
+                        bind        : function (hooks, resources, conditions) {
                             return function () {
-                                return methods.build(hooks, resources, conditions, serialize);
+                                return methods.build(hooks, resources, conditions);
                             };
                         }
                     };
@@ -2487,7 +2469,7 @@
                                     throw logs.caller.CANNOT_GET_CHILD_PATTERN;
                                 } else {
                                     hooks.apply(_hooks);
-                                    return _instance.bind(_hooks, value.resources(), value.conditions(), value.serialize());
+                                    return _instance.bind(_hooks, value.resources(), value.conditions());
                                 }
                             }
                         },
@@ -2537,7 +2519,7 @@
                                     hooks.apply();
                                     privates.pattern        = instance.init(self.url);
                                     if (privates.pattern !== null) {
-                                        privates.pattern    = privates.pattern.build(privates.hooks, privates.resources, privates.conditions, privates.serialize);
+                                        privates.pattern    = privates.pattern.build(privates.hooks, privates.resources, privates.conditions);
                                         if (privates.pattern instanceof settings.classes.RESULT) {
                                             privates.pattern.mount(privates.node, privates.before, privates.after, privates.replace);
                                             if (privates.callbacks.success !== null) {
@@ -2560,7 +2542,7 @@
                             hooks.apply();
                             privates.pattern = instance.init(self.url);
                             if (privates.pattern !== null) {
-                                privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions, privates.serialize);
+                                privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions);
                                 if (privates.pattern instanceof settings.classes.RESULT) {
                                     return privates.pattern;
                                 }
@@ -2575,13 +2557,11 @@
                         hooks       : function () { return privates.hooks;      },
                         resources   : function () { return privates.resources;  },
                         conditions  : function () { return privates.conditions; },
-                        serialize   : function () { return privates.serialize;  },
                     };
                     return {
                         render      : returning.render,
                         hooks       : returning.hooks,
                         conditions  : returning.conditions,
-                        serialize   : returning.serialize,
                         resources   : returning.resources
                     };
                 },
@@ -2612,7 +2592,6 @@
                                                                 { name: 'conditions',           type: 'object',             value: null         },
                                                                 { name: 'callbacks',            type: 'object',             value: {}           },
                                                                 { name: 'resources',            type: 'object',             value: {}           },
-                                                                { name: 'serialize',            type: 'boolean',            value: true         },
                                                                 { name: 'remove_missing_hooks', type: 'boolean',            value: true         }]) !== false) {
                         flex.oop.objects.validate(parameters.callbacks, [   { name: 'before',   type: 'function', value: null },
                                                                             { name: 'success',  type: 'function', value: null },
@@ -2633,7 +2612,6 @@
                                 data                : parameters.data,
                                 conditions          : parameters.conditions,
                                 callbacks           : parameters.callbacks,
-                                serialize           : parameters.serialize,
                                 remove_missing_hooks: parameters.remove_missing_hooks,
                                 resources           : parameters.resources,
                                 //Local
@@ -2910,11 +2888,11 @@
                 }
             };
             helpers     = {
-                testReg : function(reg, str){
+                testReg     : function(reg, str){
                     reg.lastIndex = 0;
                     return reg.test(str);
                 },
-                binds   : {
+                binds       : {
                     data        : {
                         value: [
                             //Group #1
@@ -2961,14 +2939,14 @@
                         return false;
                     }
                 },
-                isNode  : function (something) {
+                isNode      : function (something) {
                     if (something !== void 0 && something.nodeName !== void 0 && something.parentNode !== void 0 && something.nodeType !== void 0) {
                         return true;
                     } else {
                         return false;
                     }
                 },
-                tableFix: function (html) {
+                tableFix    : function (html) {
                     var tables  = html.match(settings.regs.TABLE),
                         hooks   = [];
                     if (tables instanceof Array) {
@@ -2986,6 +2964,20 @@
                         });
                     }
                     return html;
+                },
+                getTextNode : function (node, text) {
+                    var target = null;
+                    if (node.childNodes !== void 0) {
+                        try{
+                            Array.prototype.forEach.call(node.childNodes, function(child){
+                                if (child.nodeType === 3 && child.nodeValue === text){
+                                    target = child;
+                                    throw 'found';
+                                }
+                            });
+                        } catch (e){ }
+                    }
+                    return target;
                 }
             };
             callers     = {
