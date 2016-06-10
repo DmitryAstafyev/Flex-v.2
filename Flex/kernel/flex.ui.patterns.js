@@ -18,24 +18,25 @@
     if (flex !== void 0) {
         var protofunction = function () { };
         protofunction.prototype = function () {
-            var config      = null,
-                settings    = null,
+            var config          = null,
+                settings        = null,
                 //Classes
-                source      = null,
-                pattern     = null,
-                instance    = null,
-                result      = null,
-                caller      = null,
+                source          = null,
+                pattern         = null,
+                instance        = null,
+                result          = null,
+                caller          = null,
                 //Methods
-                layout      = null,
-                privates    = null,
-                controllers = null,
-                storage     = null,
-                logs        = null,
-                measuring   = null,
-                helpers     = null,
-                conditions  = null,
-                callers     = null;
+                layout          = null,
+                privates        = null,
+                controllers     = null,
+                storage         = null,
+                logs            = null,
+                measuring       = null,
+                helpers         = null,
+                conditions      = null,
+                callers         = null,
+                defaultshooks   = null;
             //Config
             config      = {
                 values      : {
@@ -133,6 +134,7 @@
                     CONTROLLERS_LINKS       : 'FLEX_PATTERNS_CONTROLLERS_LINKS',
                     CONTROLLERS_STORAGE     : 'FLEX_PATTERNS_CONTROLLERS_STORAGE',
                     CONDITIONS_STORAGE      : 'FLEX_PATTERNS_CONDITIONS_STORAGE',
+                    HOOKS_STORAGE           : 'FLEX_PATTERNS_HOOKS_STORAGE',
                     PATTERN_SOURCES         : 'FLEX_PATTERNS_PATTERN_SOURCES',
                     PATTERNS                : 'FLEX_PATTERNS_PATTERNS',
                 },
@@ -198,9 +200,12 @@
                     NO_URL_FOR_CLONE_HOOK   : '2001:NO_URL_FOR_CLONE_HOOK',
                 },
                 caller      : {
-                    CANNOT_INIT_PATTERN     : '3000:CANNOT_INIT_PATTERN',
-                    CANNOT_GET_CHILD_PATTERN: '3001:CANNOT_GET_CHILD_PATTERN',
-                    CANNOT_GET_PATTERN      : '3002:CANNOT_GET_PATTERN',
+                    CANNOT_INIT_PATTERN             : '3000:CANNOT_INIT_PATTERN',
+                    CANNOT_GET_CHILD_PATTERN        : '3001:CANNOT_GET_CHILD_PATTERN',
+                    CANNOT_GET_PATTERN              : '3002:CANNOT_GET_PATTERN',
+                    PATTERN_WITHOUT_SRC             : '3003:PATTERN_WITHOUT_SRC',
+                    CANNOT_FIND_ROOT_TEMPLATE       : '3004:CANNOT_FIND_ROOT_TEMPLATE',
+                    ONLY_ONE_TEMPLATE_ON_SAME_LEVEL : '3005:ONLY_ONE_TEMPLATE_ON_SAME_LEVEL',
                 },
                 layout      : {
                     BAD_ARRAY_OF_HOOKS      : '4000:BAD_ARRAY_OF_HOOKS',
@@ -1199,16 +1204,6 @@
                                 convert.hooks.      process();
                                 convert.model.      process();
                                 return true;
-                                /*
-                                if (privates.pattern.innerHTML.replace(settings.regs.NOT_WORDS_NUMBERS, '') === privates.html.replace(settings.regs.NOT_WORDS_NUMBERS, '')) {
-                                    convert.hooks.process();
-                                    convert.model.process();
-                                    return true;
-                                } else {
-                                    flex.logs.log(signature() + logs.pattern.WRONG_PATTERN_WRAPPER, flex.logs.types.CRITICAL);
-                                    throw logs.pattern.WRONG_PATTERN_WRAPPER;
-                                }
-                                */
                             } else {
                                 flex.logs.log(signature() + logs.pattern.CANNOT_CREATE_WRAPPER, flex.logs.types.CRITICAL);
                                 throw logs.pattern.CANNOT_CREATE_WRAPPER;
@@ -2007,8 +2002,8 @@
                         }
                     };
                     controller  = {
-                        apply       : function (_instance, _resources) {
-                            var _controllers = controllers.storage.get(self.url);
+                        apply       : function (_instance, _resources, _component_url) {
+                            var _controllers = controllers.storage.get(_component_url !== null ? [_component_url, self.url] : self.url);
                             if (_controllers !== null) {
                                 _controllers.forEach(function (controller) {
                                     methods.handle(controller, _instance, _resources);
@@ -2017,7 +2012,7 @@
                         },
                     };
                     methods     = {
-                        build       : function (_hooks, _resources, _conditions) {
+                        build       : function (_hooks, _resources, _conditions, _component_url) {
                             var nodes           = [],
                                 _map            = [],
                                 _binds          = [],
@@ -2059,7 +2054,7 @@
                                 instance        : privates.__instance,
                                 handle          : function (handle, _resources) { return methods.handle(handle, _instance, _resources); }
                             });
-                            controller.apply(_instance, _resources);
+                            controller.apply(_instance, _resources, _component_url);
                             return _instance;
                         },
                         handle      : function (handle, _instance, _resources) {
@@ -2073,9 +2068,9 @@
                                 });
                             }
                         },
-                        bind        : function (hooks, resources, conditions) {
+                        bind        : function (hooks, resources, conditions, component_url) {
                             return function () {
-                                return methods.build(hooks, resources, conditions);
+                                return methods.build(hooks, resources, conditions, component_url);
                             };
                         }
                     };
@@ -2426,19 +2421,20 @@
             //END: result class ===============================================
             //BEGIN: caller class ===============================================
             caller      = {
-                proto   : function(privates){
+                proto   : function (privates){
                     var self        = this,
                         mount       = null,
                         render      = null,
                         patterns    = null,
                         hooks       = null,
                         signature   = null,
-                        returning   = null;
+                        returning   = null,
+                        component   = null;
                     patterns    = {
                         reset   : function(){
                             privates.patterns = {};
                         },
-                        find: function (hooks) {
+                        find    : function (hooks) {
                             hooks = hooks instanceof Array ? hooks : [hooks];
                             if (hooks !== null) {
                                 hooks.forEach(function (_hooks) {
@@ -2457,6 +2453,127 @@
                             }
                         },
                     };
+                    component   = {
+                        getStructure    : function(html){
+                            function analysis(nodes, storage) {
+                                Array.prototype.forEach.call(nodes, function (node) {
+                                    var sub     = node.nodeName.toLowerCase(),
+                                        current = {};
+                                    current.url = node.hasAttribute('src') ? node.getAttribute('src') : null;
+                                    if (current.url !== null) {
+                                        current.sub = {};
+                                        if (node.children.length > 0) {
+                                            analysis(node.children, current.sub);
+                                        }
+                                        if (storage[sub] !== void 0) {
+                                            if (storage[sub] instanceof Array) {
+                                                storage[sub].push(current);
+                                            } else {
+                                                storage[sub] = [storage[sub], current];
+                                            }
+                                        } else {
+                                            storage[sub] = current;
+                                        }
+                                    } else {
+                                        flex.logs.log(logs.SIGNATURE + 'If you use inside template other templates, you cannot use nothing else. And src should be defined fro all included templates.', flex.logs.types.CRITICAL);
+                                        throw Error(logs.caller.PATTERN_WITHOUT_SRC);
+                                        return false;
+                                    }
+                                });
+                            };
+                            function buildCaller(structure, hooks, callers) {
+                                function add(_item, _hooks, structure, key) {
+                                    _object(_item).forEach(function (hook_name, hook_value) {
+                                        if (typeof hook_value !== 'object') {
+                                            _hooks[hook_name] = hook_value;
+                                        }
+                                    });
+                                    if (structure[key].sub !== void 0) {
+                                        buildCaller(structure[key].sub, _item, _hooks);
+                                    }
+                                };
+                                _object(structure).forEach(function (key, value) {
+                                    if (value instanceof Array) {
+                                        flex.logs.log(logs.SIGNATURE + 'You cannot use templates in templates in same level. You can only include template into templates. Problematic hook: ' + key + '.', flex.logs.types.CRITICAL);
+                                        throw Error(logs.caller.ONLY_ONE_TEMPLATE_ON_SAME_LEVEL);
+                                    } else {
+                                        callers[key] = {
+                                            url     : value.url,
+                                            hooks   : {}
+                                        };
+                                        if (hooks[key] !== void 0 && hooks[key] !== null && typeof hooks[key] === 'object' && !(hooks[key] instanceof Array)) {
+                                            add(hooks[key], callers[key].hooks, structure, key);
+                                        } else if (hooks[key] instanceof Array) {
+                                            callers[key].hooks = [];
+                                            hooks[key].forEach(function (item) {
+                                                var current = {};
+                                                add(item, current, structure, key);
+                                                callers[key].hooks.push(current);
+                                            });
+                                        }
+                                    }
+                                });
+                            };
+                            var container   = document.createElement('div'),
+                                structure   = {},
+                                callers     = {},
+                                _hooks      = {};
+                            container.innerHTML = html;
+                            analysis(container.children, structure);
+                            if (structure[config.values.PATTERN_NODE.toLowerCase()] !== void 0) {
+                                _hooks[config.values.PATTERN_NODE.toLowerCase()] = privates.hooks;
+                                buildCaller(structure, _hooks, callers);
+                                return callers[config.values.PATTERN_NODE.toLowerCase()];
+                            } else {
+                                throw Error(logs.caller.CANNOT_FIND_ROOT_TEMPLATE);
+                                return false;
+                            }
+                        },
+                        addGetters      : function(callers){
+                            if (callers.hooks !== void 0) {
+                                if (callers.hooks instanceof Array) {
+                                    callers.hooks.forEach(function (item, index) {
+                                        _object(item).forEach(function (hook_name, hook_value) {
+                                            if (typeof hook_value === 'object' && !(hook_value instanceof Array) && hook_value.url !== void 0) {
+                                                callers.hooks[index][hook_name] = caller.instance({
+                                                    url     : hook_value.url,
+                                                    hooks   : component.addGetters(hook_value)
+                                                });
+                                            }
+                                        });
+                                    });
+                                } else if (typeof callers.hooks === 'object') {
+                                    _object(callers.hooks).forEach(function (hook_name, hook_value) {
+                                        if (typeof hook_value === 'object' && !(hook_value instanceof Array) && hook_value.url !== void 0) {
+                                            callers.hooks[hook_name] = caller.instance({
+                                                url     : hook_value.url,
+                                                hooks   : component.addGetters(hook_value)
+                                            });
+                                        }
+                                    });
+                                }
+                            }
+                            return callers.hooks;
+                        },
+                        process         : function (html) {
+                            var _callers = {};
+                            if ((new RegExp('<\\s*' + config.values.PATTERN_NODE + '\\s{1,}src\\s*=')).test(html)) {
+                                _callers = component.getStructure(html);
+                                _object(privates).forEach(function (name, value) {
+                                    if (['hooks', '__instance', 'pattern'].indexOf(name) === -1) {
+                                        _callers[name] = value;
+                                    }
+                                });
+                                //Set URL to component (it's necessary for cases if component has controller
+                                _callers.component = self.url;
+                                //Add getters
+                                component.addGetters(_callers);
+                                return caller.instance(_callers);
+                            } else {
+                                return false;
+                            }
+                        }
+                    };
                     hooks       = {
                         values  : {
                             caller  : function (value) {
@@ -2469,7 +2586,7 @@
                                     throw logs.caller.CANNOT_GET_CHILD_PATTERN;
                                 } else {
                                     hooks.apply(_hooks);
-                                    return _instance.bind(_hooks, value.resources(), value.conditions());
+                                    return _instance.bind(_hooks, value.resources(), value.conditions(), value.component());
                                 }
                             }
                         },
@@ -2500,6 +2617,24 @@
                                 });
                             }
                             return _hooks;
+                        },
+                        defaults: function () {
+                            function process(source, destination) {
+                                _object(source).forEach(function (hook_name, hook_value) {
+                                    if (destination[hook_name] === void 0) {
+                                        destination[hook_name] = hook_value;
+                                    } else {
+                                        if (destination[hook_name] !== null && typeof destination[hook_name] === 'object') {
+                                            process(hook_value, destination[hook_name]);
+                                        }
+                                    }
+                                });
+                            };
+                            var defaults = defaultshooks.storage.get(self.url);
+                            if (defaults !== null && typeof defaults === 'object') {
+                                process(defaults, privates.hooks);
+                            }
+                            return true;
                         }
                     };
                     render      = function (clone) {
@@ -2515,21 +2650,28 @@
                                     });
                                     return list;
                                 }()),
-                                function () {
-                                    hooks.apply();
-                                    privates.pattern        = instance.init(self.url);
-                                    if (privates.pattern !== null) {
-                                        privates.pattern    = privates.pattern.build(privates.hooks, privates.resources, privates.conditions);
-                                        if (privates.pattern instanceof settings.classes.RESULT) {
-                                            privates.pattern.mount(privates.node, privates.before, privates.after, privates.replace);
-                                            if (privates.callbacks.success !== null) {
-                                                privates.pattern.handle()(privates.callbacks.success, privates.resources);
-                                            }
-                                        }
+                                function (sources) {
+                                    var _component = null;
+                                    hooks.defaults();
+                                    _component = sources.length === 1 ? component.process(sources[0].html()) : null;
+                                    if (_component !== null) {
+                                        _component.render(false, self.url);
                                     } else {
-                                        flex.logs.log(signature() + logs.caller.CANNOT_GET_PATTERN, flex.logs.types.CRITICAL);
-                                        flex.system.handle(privates.callbacks.fail, self.url);
-                                        throw logs.caller.CANNOT_GET_PATTERN;
+                                        hooks.apply();
+                                        privates.pattern = instance.init(self.url);
+                                        if (privates.pattern !== null) {
+                                            privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions, privates.component);
+                                            if (privates.pattern instanceof settings.classes.RESULT) {
+                                                privates.pattern.mount(privates.node, privates.before, privates.after, privates.replace);
+                                                if (privates.callbacks.success !== null) {
+                                                    privates.pattern.handle()(privates.callbacks.success, privates.resources);
+                                                }
+                                            }
+                                        } else {
+                                            flex.logs.log(signature() + logs.caller.CANNOT_GET_PATTERN, flex.logs.types.CRITICAL);
+                                            flex.system.handle(privates.callbacks.fail, self.url);
+                                            throw logs.caller.CANNOT_GET_PATTERN;
+                                        }
                                     }
                                 },
                                 function () {
@@ -2542,7 +2684,7 @@
                             hooks.apply();
                             privates.pattern = instance.init(self.url);
                             if (privates.pattern !== null) {
-                                privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions);
+                                privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions, privates.component);
                                 if (privates.pattern instanceof settings.classes.RESULT) {
                                     return privates.pattern;
                                 }
@@ -2557,12 +2699,14 @@
                         hooks       : function () { return privates.hooks;      },
                         resources   : function () { return privates.resources;  },
                         conditions  : function () { return privates.conditions; },
+                        component   : function () { return privates.component;  },
                     };
                     return {
                         render      : returning.render,
                         hooks       : returning.hooks,
                         conditions  : returning.conditions,
-                        resources   : returning.resources
+                        resources   : returning.resources,
+                        component   : returning.component,
                     };
                 },
                 instance: function (parameters) {
@@ -2581,18 +2725,21 @@
                     ///     [boolean]           remove_missing_hooks    (remove missed bind data),                                          &#13;&#10;
                     /// }</param>
                     /// <returns type="boolean">true - success; false - fail</returns>
-                    if (flex.oop.objects.validate(parameters, [ { name: 'url',                  type: 'string'                                  },
-                                                                { name: 'node',                 type: ['node', 'string'],   value: null         },
-                                                                { name: 'before',               type: ['node', 'string'],   value: null         },
-                                                                { name: 'after',                type: ['node', 'string'],   value: null         },
-                                                                { name: 'id',                   type: 'string',             value: flex.unique()},
-                                                                { name: 'replace',              type: 'boolean',            value: false        },
-                                                                { name: 'hooks',                type: ['object', 'array'],  value: null         },
-                                                                { name: 'data',                 type: 'array',              value: null         },
-                                                                { name: 'conditions',           type: 'object',             value: null         },
-                                                                { name: 'callbacks',            type: 'object',             value: {}           },
-                                                                { name: 'resources',            type: 'object',             value: {}           },
-                                                                { name: 'remove_missing_hooks', type: 'boolean',            value: true         }]) !== false) {
+                    if (flex.oop.objects.validate(parameters, [ //For public usage
+                                                                { name: 'url',                  type: 'string'                                              },
+                                                                { name: 'node',                 type: ['node', 'string', 'array', 'NodeList'],      value: null         },
+                                                                { name: 'before',               type: ['node', 'string', 'array', 'NodeList'],      value: null         },
+                                                                { name: 'after',                type: ['node', 'string', 'array', 'NodeList'],      value: null         },
+                                                                { name: 'id',                   type: 'string',                                     value: flex.unique()},
+                                                                { name: 'replace',              type: 'boolean',                                    value: false        },
+                                                                { name: 'hooks',                type: ['object', 'array'],                          value: null         },
+                                                                { name: 'data',                 type: 'array',                                      value: null         },
+                                                                { name: 'conditions',           type: 'object',                                     value: null         },
+                                                                { name: 'callbacks',            type: 'object',                                     value: {}           },
+                                                                { name: 'resources',            type: 'object',                                     value: {}           },
+                                                                { name: 'remove_missing_hooks', type: 'boolean',                                    value: true         },
+                                                                //For internal usage
+                                                                { name: 'component',            type: 'string',                                     value: null         }]) !== false) {
                         flex.oop.objects.validate(parameters.callbacks, [   { name: 'before',   type: 'function', value: null },
                                                                             { name: 'success',  type: 'function', value: null },
                                                                             { name: 'fail',     type: 'function', value: null }]);
@@ -2600,13 +2747,15 @@
                             parent          : settings.classes.CALLER,
                             constr          : function () {
                                 this.url = flex.system.url.restore(parameters.url);
+                                //Uncomment to check structure of component
+                                //this._hooks = parameters.hooks;
                             },
                             privates        : {
                                 //From parameters
                                 id                  : parameters.id,
-                                node                : parameters.node   !== null ? (typeof parameters.node      === 'string' ? _nodes(parameters.node   ).target : [parameters.node]     ) : null,
-                                before              : parameters.before !== null ? (typeof parameters.before    === 'string' ? _nodes(parameters.before ).target : [parameters.before]   ) : null,
-                                after               : parameters.after  !== null ? (typeof parameters.after     === 'string' ? _nodes(parameters.after  ).target : [parameters.after]    ) : null,
+                                node                : parameters.node   !== null ? (typeof parameters.node      === 'string' ? _nodes(parameters.node   ).target : (parameters.node     instanceof Array ? parameters.node      : (parameters.node      instanceof NodeList ? parameters.node   : [parameters.node]     ))) : null,
+                                before              : parameters.before !== null ? (typeof parameters.before    === 'string' ? _nodes(parameters.before ).target : (parameters.before   instanceof Array ? parameters.before    : (parameters.before    instanceof NodeList ? parameters.before : [parameters.before]   ))) : null,
+                                after               : parameters.after  !== null ? (typeof parameters.after     === 'string' ? _nodes(parameters.after  ).target : (parameters.after    instanceof Array ? parameters.after     : (parameters.after     instanceof NodeList ? parameters.after  : [parameters.after]    ))) : null,
                                 replace             : parameters.replace,
                                 hooks               : parameters.hooks,
                                 data                : parameters.data,
@@ -2615,6 +2764,7 @@
                                 remove_missing_hooks: parameters.remove_missing_hooks,
                                 resources           : parameters.resources,
                                 //Local
+                                component           : parameters.component,
                                 pattern             : null
                             },
                             prototype       : caller.proto
@@ -2622,7 +2772,7 @@
                     } else {
                         return null;
                     }
-                },
+                }
             };
             //END: caller class ===============================================
             layout      = {
@@ -2685,52 +2835,54 @@
                     var _caller     = null,
                         is_child    = is_child !== void 0 ? is_child : false,
                         url         = null;
-                    if (pattern.hasAttribute('src')) {
-                        _caller = {
-                            url     : pattern.getAttribute('src'),
-                            hooks   : {}
-                        };
-                        Array.prototype.forEach.call(pattern.children, function (child) {
-                            var index   = 0,
-                                hook    = child.nodeName.toLowerCase();
-                            if (_caller.hooks[hook] !== void 0 && !(_caller.hooks instanceof Array)) {
-                                _caller.hooks = [_caller.hooks];
-                            }
-                            if (_caller.hooks instanceof Array) {
-                                index = getIndex(_caller.hooks, hook);
-                                if (index === -1) {
-                                    _caller.hooks.push({});
-                                    index = _caller.hooks.length - 1;
-                                }
-                                if (!child.hasAttribute('src')) {
-                                    _caller.hooks[index][hook] = child.innerHTML;
-                                } else {
-                                    _caller.hooks[index][hook] = layout.caller(child, true);
-                                }
-                            } else {
-                                if (!child.hasAttribute('src')) {
-                                    _caller.hooks[hook] = child.innerHTML;
-                                } else {
-                                    _caller.hooks[hook] = layout.caller(child, true);
-                                }
-                            }
-                        });
-                        if (typeof _caller.hooks === 'object' && Object.keys(_caller.hooks).length === 0) {
-                            delete _caller.hooks;
+                    _caller = {
+                        url     : pattern.hasAttribute('src') ? pattern.getAttribute('src') : null,
+                        hooks   : {}
+                    };
+                    Array.prototype.forEach.call(pattern.children, function (child) {
+                        var index   = 0,
+                            hook    = child.nodeName.toLowerCase();
+                        if (_caller.hooks[hook] !== void 0 && !(_caller.hooks instanceof Array)) {
+                            _caller.hooks = [_caller.hooks];
                         }
-                        if (!is_child) {
-                            _caller.node        = pattern;
-                            _caller.replace     = true;
-                            _caller.callbacks   = {
-                                success : getCallback(pattern, 'success'),
-                                error   : getCallback(pattern, 'error'),
-                            };
-                            _caller = caller.instance(_caller).render();
+                        if (_caller.hooks instanceof Array) {
+                            index = getIndex(_caller.hooks, hook);
+                            if (index === -1) {
+                                _caller.hooks.push({});
+                                index = _caller.hooks.length - 1;
+                            }
+                            if (child.children.length === 0) {
+                                _caller.hooks[index][hook] = child.innerHTML;
+                            } else {
+                                _caller.hooks[index][hook] = layout.caller(child, true);
+                            }
                         } else {
+                            if (child.children.length === 0) {
+                                _caller.hooks[hook] = child.innerHTML;
+                            } else {
+                                _caller.hooks[hook] = layout.caller(child, true);
+                            }
+                        }
+                    });
+                    if (typeof _caller.hooks === 'object' && Object.keys(_caller.hooks).length === 0) {
+                        delete _caller.hooks;
+                    }
+                    if (!is_child && _caller.url !== null) {
+                        _caller.node        = pattern;
+                        _caller.replace     = true;
+                        _caller.callbacks   = {
+                            success : getCallback(pattern, 'success'),
+                            error   : getCallback(pattern, 'error'),
+                        };
+                        _caller = caller.instance(_caller).render();
+                        return _caller;
+                    } else {
+                        if (_caller.url !== null) {
                             _caller = caller.instance(_caller);
+                            return _caller;
                         }
                     }
-                    return _caller;
+                    return _caller.hooks;
                 },
                 attach  : function () {
                     if (document.readyState !== 'complete') {
@@ -2763,9 +2915,16 @@
                         }
                         storage[pattern_url].push(controller);
                     },
-                    get : function (pattern_url) {
-                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONTROLLERS_STORAGE, {});
-                        return storage[pattern_url] !== void 0 ? storage[pattern_url] : null;
+                    get : function (urls) {
+                        var storage     = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONTROLLERS_STORAGE, {}),
+                            urls        = typeof urls === 'string' ? [urls] : urls,
+                            result      = [];
+                        urls.forEach(function (url) {
+                            if (storage[url] !== void 0) {
+                                result = result.concat(storage[url]);
+                            }
+                        });
+                        return result;
                     },
                 },
                 current     : {
@@ -2865,7 +3024,7 @@
                 }())
             };
             conditions  = {
-                storage     : {
+                storage : {
                     add: function (pattern_url, _conditions) {
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONDITIONS_STORAGE, {});
                         storage[pattern_url] = _conditions;
@@ -2875,7 +3034,7 @@
                         return storage[pattern_url] !== void 0 ? storage[pattern_url] : null;
                     },
                 },
-                attach: function (_conditions) {
+                attach  : function (_conditions) {
                     var url     = null,
                         _source = null;
                     if (typeof _conditions === 'object' && _conditions !== null) {
@@ -2883,6 +3042,29 @@
                         if (url !== null) {
                             _source = controllers.references.getPatternURL(url);
                             conditions.storage.add(_source, _conditions);
+                        }
+                    }
+                }
+            };
+            defaultshooks = {
+                storage : {
+                    add: function (pattern_url, _hooks) {
+                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.HOOKS_STORAGE, {});
+                        storage[pattern_url] = _hooks;
+                    },
+                    get : function (pattern_url) {
+                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.HOOKS_STORAGE, {});
+                        return storage[pattern_url] !== void 0 ? storage[pattern_url] : null;
+                    },
+                },
+                attach  : function (_hooks) {
+                    var url     = null,
+                        _source = null;
+                    if (typeof _hooks === 'object' && _hooks !== null) {
+                        url = controllers.current.get() !== null ? controllers.current.get() : flex.resources.attach.js.getCurrentSRC();
+                        if (url !== null) {
+                            _source = controllers.references.getPatternURL(url);
+                            defaultshooks.storage.add(_source, _hooks);
                         }
                     }
                 }
@@ -3020,6 +3202,9 @@
                 conditions  : {
                     attach  : conditions.attach
                 },
+                hooks       : {
+                    attach: defaultshooks.attach
+                },
                 classes     : {
                     NODE_LIST: {
                         addMethod : instance.nodeList.addMethod
@@ -3033,6 +3218,7 @@
             callers.init();
             window['_controller'] = privates.controller.attach;
             window['_conditions'] = privates.conditions.attach;
+            window['_hooks'     ] = privates.hooks.attach;
             //Run layout parser
             layout.attach();
             //Public part
