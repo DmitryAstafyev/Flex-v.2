@@ -1074,6 +1074,8 @@
                                                         }
                                                     } else if (type === "array") {
                                                         status = (object[property.name] instanceof Array === true ? true : status);
+                                                    } else if (window[type] !== void 0 && ['string', 'number', 'bool'].indexOf(type) === -1){
+                                                        status = (object[property.name] instanceof window[type] ? true : status);
                                                     } else {
                                                         status = (typeof object[property.name] === type ? true : status);
                                                     }
@@ -1087,13 +1089,13 @@
                                                 }
                                             } finally {
                                                 if (status === false) {
-                                                    if (property.value) {
+                                                    if (property.value !== void 0) {
                                                         object[property.name] = property.value;
                                                     } else {
                                                         throw 'deny';
                                                     }
                                                 } else {
-                                                    if (property.values) {
+                                                    if (property.values !== void 0) {
                                                         if (property.values instanceof Array) {
                                                             try {
                                                                 values_check = false;
