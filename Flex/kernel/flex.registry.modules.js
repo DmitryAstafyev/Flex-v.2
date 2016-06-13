@@ -52,6 +52,10 @@
                 /// <field type = 'function'>Controller of arearesizer</field>
                 arearesizer : {  source: 'KERNEL::flex.ui.arearesizer.js',    hash: 'HASHPROPERTY' },
             },
+            types : {
+                /// <field type = 'function'>Extended array class</field>
+                array: { source: 'KERNEL::flex.types.array.js' }
+            },
             presentation: {  source: 'program/presentation.js', hash: 'HASHPROPERTY' },
         };
     }
