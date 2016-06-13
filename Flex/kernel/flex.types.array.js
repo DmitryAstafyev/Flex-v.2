@@ -204,7 +204,7 @@
                     configurable    : false,
                     enumerable      : false,
                     writable        : false,
-                    value           : function (start, count /*, element1, element2, ... */) {
+                    value           : function (start, count /*, item_0, item_1, ... item_n */) {
                         var removed = [],
                             item    = null,
                             _start  = null;
