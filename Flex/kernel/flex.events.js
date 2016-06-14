@@ -111,8 +111,9 @@
                             ///     [string]    name,                                                   &#13;&#10;
                             ///     [function]  handle,                                                 &#13;&#10;
                             ///     [string]    id     (optional),                                      &#13;&#10;
-                            ///     [boolean]   once   (optional) -> true - remove after handle will be once used}</param>
-                            ///     [boolean]   touch  (optional) -> true - try find analog of touch event and attach it}</param>
+                            ///     [boolean]   once   (optional, def:false) -> true - remove after handle will be once used}</param>
+                            ///     [boolean]   touch  (optional, def:false) -> true - try find analog of touch event and attach it}</param>
+                            ///     [boolean]   safely (optional, def:false) -> true - will block all throws and show log in console instead.}</param>
                             /// <returns type="boolean">true if success and false if fail</returns>
                             function validate(parameters) {
                                 parameters.element  = parameters.element        !== void 0      ? parameters.element    : null;
@@ -681,13 +682,14 @@
                         privates = {
                             _add    : add,
                             _remove : remove,
-                            add     : function (element, type, handle, id, touch) {
+                            add     : function (element, type, handle, id, touch, safely) {
                                 return add({
                                     element : element,
                                     name    : type,
                                     handle  : handle,
                                     id      : id,
-                                    touch   : touch
+                                    touch   : touch,
+                                    safely  : safely
                                 });
                             },
                             remove  : function (element, type, handle, id) {
