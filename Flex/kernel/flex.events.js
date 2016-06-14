@@ -33,34 +33,32 @@
                             Handle      = null,
                             privates    = null;
                         //Handle class
-                        Handle              = function (id, handle, once, touch) {
+                        Handle              = function (id, handle, once, touch, safely) {
                             this.id             = id;
                             this.handle         = handle;
                             this.once           = once;
                             this.touch          = touch;
+                            this.safely         = safely;
                             this.remove         = false;
                             this.interaction    = null;
                             this.working        = false;
                             this.device         = null;
                         };
                         Handle.prototype    = {
-                            id          : null,
-                            once        : null,
-                            touch       : null,
-                            remove      : null,
-                            handle      : null,
-                            interaction : null,
-                            working     : null,
-                            device      : null,
                             launch      : function (context, event) {
+                                var error = null;
                                 if (this.remove === false && this.isDouble(event) === false) {
                                     try {
-                                        this.working    = true;
-                                        this.remove     = this.once;
+                                        this.working = true;
+                                        this.remove = this.once;
                                         return this.handle.call(context, event);
                                     } catch (e) {
-                                        this.error(event, e);
-                                        return null;
+                                        if (this.safely) {
+                                            this.error(event, e);
+                                            return null;
+                                        } else {
+                                            error = e;
+                                        }
                                     } finally {
                                         this.working = false;
                                         if (this.once === true && this.remove === false) {
@@ -70,6 +68,9 @@
                                                 flex.logs.types.WARNING
                                             );
                                         }
+                                    }
+                                    if (error !== null) {
+                                        throw error;
                                     }
                                 }
                                 return null;
@@ -120,6 +121,7 @@
                                 parameters.id       = typeof parameters.id      === 'string'    ? parameters.id         : flex.unique();
                                 parameters.once     = typeof parameters.once    === 'boolean'   ? parameters.once       : false;
                                 parameters.touch    = typeof parameters.touch   === 'boolean'   ? parameters.touch      : true;
+                                parameters.safely   = typeof parameters.safely  === 'boolean'   ? parameters.safely     : false;
                                 //Prevent double attaching for touch events
                                 if (touches.has(parameters.name) === false) {
                                     parameters.touch = false;
@@ -131,7 +133,7 @@
                             if (parameters.element !== null && parameters.handle !== null && parameters.name !== null) {
                                 handles = storage.get(parameters.element, false);
                                 if (handles !== null) {
-                                    handles = tools.buildCommonHandle(parameters.element, parameters.name, handles, parameters.touch);
+                                    handles = tools.buildCommonHandle(parameters.element, parameters.name, handles, parameters.touch, parameters.safely);
                                     if (handles instanceof Array) {
                                         handles.push(
                                             new Handle(parameters.id, parameters.handle, parameters.once, parameters.touch)
@@ -142,7 +144,7 @@
                             }
                             return null;
                         };
-                        function fire(element, event, element_id, original_type) {
+                        function fire(element, event, element_id, original_type, safely) {
                             /// <summary>
                             /// Common handle of events
                             /// </summary>
@@ -157,7 +159,8 @@
                                 isPrevent           = null,
                                 self                = this,
                                 needRemoveChecking  = false,
-                                event_type          = (event.type !== original_type ? original_type : event.type);
+                                event_type          = (event.type !== original_type ? original_type : event.type),
+                                error               = null;
                             if (event && element && element_id && handles_storage !== null) {
                                 event = tools.unificationEvent(event);
                                 if (handles_storage[event_type]) {
@@ -196,12 +199,16 @@
                                             );
                                         } catch (e) {
                                             if (e !== 'prevent') {
-                                                flex.logs.log(
-                                                    'Unexpected error in DOM.fire; \n\r ' +
-                                                    '>event: '      + event.type + '\n\r ' +
-                                                    '>element_id'   + element_id,
-                                                    flex.logs.types.CRITICAL
-                                                );
+                                                if (safely) {
+                                                    flex.logs.log(
+                                                        'Unexpected error in DOM.fire; \n\r ' +
+                                                        '>event: ' + event.type + '\n\r ' +
+                                                        '>element_id' + element_id,
+                                                        flex.logs.types.CRITICAL
+                                                    );
+                                                } else {
+                                                    error = e;
+                                                }
                                             }
                                         } finally {
                                             if (needRemoveChecking !== false) {
@@ -220,8 +227,11 @@
                                                     storage.clear(element);
                                                 }
                                             }
-                                            return true;
                                         }
+                                        if (error !== null) {
+                                            throw error;
+                                        }
+                                        return true;
                                     }
                                 }
                             }
@@ -462,7 +472,7 @@
                             }
                         };
                         tools = {
-                            buildCommonHandle   : function (element, type, storage, touch) {
+                            buildCommonHandle   : function (element, type, storage, touch, safely) {
                                 /// <summary>
                                 /// Build common handle for element for defined event
                                 /// </summary>
@@ -474,7 +484,7 @@
                                 if (typeof storage[type] !== "object") {
                                     storage[type] = {
                                         globalHandle    : function (event) {
-                                            return fire.call(element, element, event, element_id, type);
+                                            return fire.call(element, element, event, element_id, type, safely);
                                         },
                                         element_id      : element_id,
                                         handles         : []
