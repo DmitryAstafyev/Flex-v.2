@@ -61,7 +61,7 @@
                                 url                     = url.path;
                                 return url;
                             };
-                            var url     = system.resources.js.getCurrentSRC(),
+                            var url     = system.resources.js.getCurrentSRC(true),
                                 script  = null;
                             if (url !== null) {
                                 return accept(url);
@@ -4440,20 +4440,19 @@
                             }
                         }
                     },
-                    getCurrentSRC   : function () {
+                    getCurrentSRC   : function (detect_core) {
                         ///     <summary>Try to get URL of current (running) script</summary>
                         ///     <returns type="STRING">URL</returns>
-                        var urls = null;
+                        var urls        = null,
+                            detect_core = typeof detect_core === 'boolean' ? detect_core : false;
                         try {
                             throw new Error('Script URL detection');
-                        }
-                        catch (e) {
+                        } catch (e) {
                             if (typeof e.stack === 'string') {
                                 urls = e.stack.match(options.regs.urls.JS_URL);
                                 if (urls instanceof Array) {
                                     if (urls.length > 0) {
-                                        //Exclude parent script (flex.core.js)
-                                        return urls[urls.length - 1].indexOf(options.files.CORE_URL) === -1 ? urls[urls.length - 1] : null;
+                                        return detect_core ? urls[urls.length - 1] : (urls[urls.length - 1].indexOf(options.files.CORE_URL) === -1 ? urls[urls.length - 1] : null);
                                     }
                                 }
                             }
