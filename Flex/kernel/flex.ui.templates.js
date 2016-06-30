@@ -771,10 +771,16 @@
                     get: function (url) {
                         var target = null;
                         if (settings.storage.USE_LOCALSTORAGE === true) {
-                            flex.hashes.update(url);
                             target = flex.localStorage.getJSON(url);
                             if (target !== null) {
-                                if (target.hash === flex.hashes.get(url)) {
+                                flex.hashes.update(url);
+                                if ((target.hash === flex.hashes.get(url) || target.hash === null) && (target.html !== '' && typeof target.html === 'string')) {
+                                    if (target.hash === null && flex.hashes.get(url) !== null) {
+                                        flex.localStorage.addJSON(url, {
+                                            html: target.html,
+                                            hash: flex.hashes.get(url)
+                                        });
+                                    }
                                     return target.html;
                                 }
                             }
