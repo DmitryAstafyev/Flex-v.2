@@ -31,10 +31,12 @@
                 },
                 attrs   : {
                     STORAGE_PROPERTY    : 'flex.attrs.bind.storage',
+                    NODE_ID_PROPERTY    : 'flex.attrs.bind.node.id',
                     HANDLE_ID_PROPERTY  : 'flex.attrs.bind.handle.id'
                 },
-                props: {
+                props   : {
                     STORAGE_PROPERTY    : 'flex.props.bind.storage',
+                    NODE_ID_PROPERTY    : 'flex.props.bind.node.id',
                     HANDLE_ID_PROPERTY  : 'flex.props.bind.handle.id'
                 },
             };
@@ -239,13 +241,13 @@
                             };
                         Storage.prototype = {
                             init            : function (){
-                                this._destroy = mutationCross.attach(node,
+                                this._destroy = mutationCross.attach(this.node,
                                     this.handle,
                                     this,
                                     {
                                         attributes              : true,
                                         childList               : false,
-                                        subtree                 : false,
+                                        subtree                 : true,
                                         characterData           : true,
                                         attributeOldValue       : false,
                                         characterDataOldValue   : false
@@ -254,61 +256,76 @@
                             },
                             handle          : function (attr, mutation) {
                                 var self        = this,
-                                    attr_value  = null;
-                                if (this.binds[attr]) {
-                                    attr_value = this.node.getAttribute(attr);
-                                    if (attr_value !== this.binds[attr].current) {
-                                        this.binds[attr].previous   = this.binds[attr].current;
-                                        this.binds[attr].current    = attr_value;
-                                        _object(this.binds[attr].handles).forEach(function (id, handle) {
-                                            handle.call(self.node, attr, self.binds[attr].current, self.binds[attr].previous, mutation, id);
+                                    attr_value  = null,
+                                    target      = mutation.target,
+                                    node_id     = target[settings.attrs.NODE_ID_PROPERTY] !== void 0 ? target[settings.attrs.NODE_ID_PROPERTY] : null;
+                                if (node_id !== null && this.binds[node_id] !== void 0 && this.binds[node_id][attr] !== void 0) {
+                                    attr_value = target.getAttribute(attr);
+                                    if (attr_value !== this.binds[node_id][attr].current) {
+                                        this.binds[node_id][attr].previous  = this.binds[node_id][attr].current;
+                                        this.binds[node_id][attr].current   = attr_value;
+                                        _object(this.binds[node_id][attr].handles).forEach(function (id, handle) {
+                                            handle.call(target, attr, self.binds[node_id][attr].current, self.binds[node_id][attr].previous, mutation, id);
                                         });
                                     }
                                 }
                             },
-                            make            : function (attr) {
-                                if (!this.binds[attr]) {
-                                    this.binds[attr] = {
-                                        handles     : {},
-                                        previous    : null,
-                                        current     : this.node.getAttribute(attr)
-                                    };
-                                }
+                            make            : function (node, attr) {
+                                var node_id                 = this.setID(node);
+                                this.binds[node_id]         = this.binds[node_id]       === void 0 ? {} : this.binds[node_id];
+                                this.binds[node_id][attr]   = this.binds[node_id][attr] === void 0 ?
+                                    {
+                                        handles : {},
+                                        previous: null,
+                                        current : node.getAttribute(attr)
+                                    } : this.binds[node_id][attr];
                             },
-                            add             : function (attr, handle) {
-                                var id = flex.unique();
+                            add             : function (node, attr, handle) {
+                                var node_id     = node[settings.attrs.NODE_ID_PROPERTY],
+                                    handle_id   = flex.unique();
                                 //Save handle ID in handle
-                                handle[settings.attrs.HANDLE_ID_PROPERTY] = id;
+                                handle[settings.attrs.HANDLE_ID_PROPERTY] = handle_id;
                                 //Add handle in storage
-                                this.binds[attr].handles[id] = handle;
+                                this.binds[node_id][attr].handles[handle_id] = handle;
                                 //Return handle ID
-                                return id;
+                                return handle_id;
                             },
-                            remove          : function (attr, id) {
-                                var result = null;
-                                if (this.binds[attr]) {
-                                    if (this.binds[attr].handles[id]) {
-                                        delete this.binds[attr].handles[id];
-                                        if (Object.keys(this.binds[attr].handles).length === 0) {
-                                            result = delete this.binds[attr];
-                                            this.destroy();
+                            remove          : function (node, attr, id) {
+                                var result  = null,
+                                    node_id = node[settings.attrs.NODE_ID_PROPERTY];
+                                if (this.binds[node_id] !== void 0 && this.binds[node_id][attr] !== void 0) {
+                                    if (this.binds[node_id][attr].handles[id] !== void 0) {
+                                        delete this.binds[node_id][attr].handles[id];
+                                        if (Object.keys(this.binds[node_id][attr].handles).length === 0) {
+                                            result = delete this.binds[node_id][attr];
+                                            if (Object.keys(this.binds[node_id]).length === 0) {
+                                                result = delete this.binds[node_id];
+                                                this.destroy();
+                                            }
                                             return result;
                                         }
                                     }
                                 }
                                 return result;
                             },
-                            kill            : function (attr) {
-                                var result = null;
-                                if (this.binds[attr]) {
-                                    result = delete this.binds[attr];
-                                    this.destroy();
+                            kill            : function (node, attr) {
+                                var result  = null,
+                                    node_id = node[settings.attrs.NODE_ID_PROPERTY];
+                                if (this.binds[node_id] !== void 0 && this.binds[node_id][attr] !== void 0) {
+                                    result = delete this.binds[node_id][attr];
+                                    if (Object.keys(this.binds[node_id]).length === 0) {
+                                        result = delete this.binds[node_id];
+                                        this.destroy();
+                                    }
                                     return result;
                                 }
                                 return result;
                             },
-                            isAttrReady     : function (attr) {
-                                return this.binds[attr] !== void 0 ? true : false;
+                            setID           : function (node){
+                                if (node[settings.attrs.NODE_ID_PROPERTY] === void 0) {
+                                    node[settings.attrs.NODE_ID_PROPERTY] = flex.unique();
+                                }
+                                return node[settings.attrs.NODE_ID_PROPERTY];
                             },
                             destroy         : function (){
                                 if (Object.keys(this.binds).length === 0) {
@@ -321,7 +338,7 @@
                         return new Storage(node);
                     }
                 },
-                bind    : function (node, attr, handle) {
+                bind    : function (node, attr, handle, parent) {
                     /// <signature>
                     ///     <summary>Bind handle to attribute of node</summary>
                     ///     <param name="node"      type="DOMNode"  >Target node</param>
@@ -330,29 +347,26 @@
                     ///     <returns type="STRING"/>
                     /// </signature>
                     var storage = settings.attrs.STORAGE_PROPERTY,
-                        value   = null;
+                        parent  = parent !== void 0 ? parent : node;
                     if (mutationCross.attach !== null) {
                         if (node !== void 0 && typeof attr === 'string' && typeof handle === 'function') {
                             if (node.nodeName) {
-                                if (!node[storage]) {
+                                if (!parent[storage]) {
                                     //Node isn't listening
-                                    node[storage] = attrs.storage.create(node);
-                                    node[storage].init();
+                                    parent[storage] = attrs.storage.create(parent);
+                                    parent[storage].init();
                                 }
-                                storage = node[storage];
+                                storage = parent[storage];
                                 //Prepare attr if needed
-                                if (!storage.isAttrReady(attr)) {
-                                    //First handle for attr
-                                    storage.make(attr);
-                                }
+                                storage.make(node, attr);
                                 //Add handle
-                                return storage.add(attr, handle);
+                                return storage.add(node, attr, handle);
                             }
                         }
                         throw 'attrs.bind::' + errors.objects.INCORRECT_ARGUMENTS;
                     }
                 },
-                unbind  : function (node, attr, id) {
+                unbind  : function (node, attr, id, parent) {
                     /// <signature>
                     ///     <summary>Unbind handle to attribute of node by handle's ID</summary>
                     ///     <param name="node"      type="DOMNode"  >Target node</param>
@@ -360,32 +374,30 @@
                     ///     <param name="id"        type="STRING"   >ID of handle</param>
                     ///     <returns type="BOOLEAN"/>
                     /// </signature>
-                    var storage = settings.attrs.STORAGE_PROPERTY;
+                    var storage = settings.attrs.STORAGE_PROPERTY,
+                        parent  = parent !== void 0 ? parent : node;
                     if (typeof node === 'object' && typeof attr === 'string' && typeof id === 'string') {
-                        if (node[storage]) {
-                            storage = node[storage];
-                            if (storage.isAttrReady(attr)) {
-                                return storage.remove(attr, id);
-                            }
+                        if (parent[storage]) {
+                            storage = parent[storage];
+                            return storage.remove(node, attr, id);
                         }
                         return null;
                     }
                     throw 'attrs.unbind::' + errors.objects.INCORRECT_ARGUMENTS;
                 },
-                kill    : function (node, attr) {
+                kill    : function (node, attr, parent) {
                     /// <signature>
                     ///     <summary>Unbind all handles, which was attached to attribute of node</summary>
                     ///     <param name="node"      type="DOMNode"  >Target node</param>
                     ///     <param name="attr"      type="STRING"   >Attribute name</param>
                     ///     <returns type="BOOLEAN"/>
                     /// </signature>
-                    var storage = settings.attrs.STORAGE_PROPERTY;
+                    var storage = settings.attrs.STORAGE_PROPERTY,
+                        parent  = parent !== void 0 ? parent : node;
                     if (typeof node === 'object' && typeof attr === 'string') {
-                        if (node[storage]) {
-                            storage = node[storage];
-                            if (storage.isAttrReady(attr)) {
-                                return storage.kill(attr);
-                            }
+                        if (parent[storage]) {
+                            storage = parent[storage];
+                            return storage.kill(node, attr);
                         }
                         return null;
                     }
@@ -404,7 +416,7 @@
                         Storage.prototype = {
                             init            : function (){
                                 this._destroy = mutationCross.attach(
-                                    node,
+                                    this.node,
                                     this.handle,
                                     this,
                                     {
@@ -417,9 +429,8 @@
                                     }
                                 );
                             },
-                            prop            : function(prop){
-                                var res     = null,
-                                    node    = this.node;
+                            prop            : function (node, prop){
+                                var res = null;
                                 prop.split('.').forEach(function (step, index, steps) {
                                     if (node[step] !== void 0 && index < steps.length - 1) {
                                         node = node[step];
@@ -433,67 +444,81 @@
                                 return res;
                             },
                             handle          : function (attr, mutation) {
-                                var self = this;
-                                _object(this.binds).forEach(function (prop, bind_data) {
-                                    var prop_value = self.binds[prop].parent[prop];
-                                    if (prop_value !== self.binds[prop].current) {
-                                        self.binds[prop].previous   = self.binds[prop].current;
-                                        self.binds[prop].current    = prop_value;
-                                        _object(self.binds[prop].handles).forEach(function (id, handle) {
-                                            handle.call(self.binds[prop].parent, prop, self.binds[prop].current, self.binds[prop].previous, mutation, id);
-                                        });
-                                    }
-                                });
-                            },
-                            make            : function (prop) {
-                                var prop = this.prop(prop);
-                                if (!this.binds[prop.name]) {
-                                    this.binds[prop.name] = {
-                                        handles     : {},
-                                        previous    : null,
-                                        current     : prop.parent[prop.name],
-                                        parent      : prop.parent
-                                    };
+                                var self        = this,
+                                    target      = mutation.target,
+                                    node_id     = target[settings.props.NODE_ID_PROPERTY] !== void 0 ? target[settings.props.NODE_ID_PROPERTY] : null;
+                                if (node_id !== null && this.binds[node_id] !== void 0) {
+                                    _object(this.binds[node_id]).forEach(function (prop, bind_data) {
+                                        var prop_value = bind_data.parent[prop];
+                                        if (prop_value !== bind_data.current) {
+                                            bind_data.previous    = bind_data.current;
+                                            bind_data.current     = prop_value;
+                                            _object(bind_data.handles).forEach(function (id, handle) {
+                                                handle.call(bind_data.parent, prop, bind_data.current, bind_data.previous, mutation, id);
+                                            });
+                                        }
+                                    });
                                 }
                             },
-                            add             : function (prop, handle) {
-                                var id      = flex.unique(),
-                                    prop    = this.prop(prop);
-                                //Save handle ID in handle
-                                handle[settings.props.HANDLE_ID_PROPERTY] = id;
-                                //Add handle in storage
-                                this.binds[prop.name].handles[id] = handle;
-                                //Return handle ID
-                                return id;
+                            make            : function (node, prop) {
+                                var node_id                     = this.setID(node),
+                                    prop                        = this.prop(node, prop);
+                                this.binds[node_id]             = this.binds[node_id] === void 0 ? {} : this.binds[node_id];
+                                this.binds[node_id][prop.name]  = this.binds[node_id][prop.name] === void 0 ?
+                                    {
+                                        handles : {},
+                                        previous: null,
+                                        current : prop.parent[prop.name],
+                                        parent  : prop.parent
+                                    } : this.binds[node_id][prop.name];
                             },
-                            remove          : function (prop, id) {
+                            add             : function (node, prop, handle) {
+                                var handle_id   = flex.unique(),
+                                    node_id     = node[settings.props.NODE_ID_PROPERTY] !== void 0 ? node[settings.props.NODE_ID_PROPERTY] : null,
+                                    prop        = this.prop(node, prop);
+                                //Save handle ID in handle
+                                handle[settings.props.HANDLE_ID_PROPERTY] = handle_id;
+                                //Add handle in storage
+                                this.binds[node_id][prop.name].handles[handle_id] = handle;
+                                //Return handle ID
+                                return handle_id;
+                            },
+                            remove          : function (node, prop, id) {
                                 var result  = null,
-                                    prop    = this.prop(prop);
-                                if (this.binds[prop.name]) {
-                                    if (this.binds[prop.name].handles[id]) {
-                                        delete this.binds[prop.name].handles[id];
-                                        if (Object.keys(this.binds[prop.name].handles).length === 0) {
-                                            result = delete this.binds[prop.name];
-                                            this.destroy();
-                                            return result;
+                                    node_id = node[settings.props.NODE_ID_PROPERTY] !== void 0 ? node[settings.props.NODE_ID_PROPERTY] : null,
+                                    prop    = this.prop(node, prop);
+                                if (node_id !== null && this.binds[node_id] !== void 0 && this.binds[node_id][prop.name] !== void 0) {
+                                    if (this.binds[node_id][prop.name].handles[id]) {
+                                        delete this.binds[node_id][prop.name].handles[id];
+                                        if (Object.keys(this.binds[node_id][prop.name].handles).length === 0) {
+                                            result = delete this.binds[node_id][prop.name];
+                                            if (Object.keys(this.binds[node_id]).length === 0) {
+                                                result = delete this.binds[node_id];
+                                                this.destroy();
+                                            }
                                         }
                                     }
                                 }
                                 return result;
                             },
-                            kill            : function (prop) {
+                            kill            : function (node, prop) {
                                 var result  = null,
-                                    prop    = this.prop(prop);
-                                if (this.binds[prop.name]) {
-                                    result = delete this.binds[prop.name];
-                                    this.destroy();
-                                    return result;
+                                    node_id = node[settings.props.NODE_ID_PROPERTY] !== void 0 ? node[settings.props.NODE_ID_PROPERTY] : null,
+                                    prop    = this.prop(node, prop);
+                                if (node_id !== null && this.binds[node_id] !== void 0 && this.binds[node_id][prop.name] !== void 0) {
+                                    result = delete this.binds[node_id][prop.name];
+                                    if (Object.keys(this.binds[node_id]).length === 0) {
+                                        result = delete this.binds[node_id];
+                                        this.destroy();
+                                    }
                                 }
                                 return result;
                             },
-                            isPropReady: function (prop) {
-                                var prop = this.prop(prop);
-                                return this.binds[prop.name] !== void 0 ? true : false;
+                            setID           : function (node){
+                                if (node[settings.props.NODE_ID_PROPERTY] === void 0) {
+                                    node[settings.props.NODE_ID_PROPERTY] = flex.unique();
+                                }
+                                return node[settings.props.NODE_ID_PROPERTY];
                             },
                             destroy         : function (){
                                 if (Object.keys(this.binds).length === 0) {
@@ -506,7 +531,7 @@
                         return new Storage(node);
                     }
                 },
-                bind    : function (node, prop, handle) {
+                bind    : function (node, prop, handle, parent) {
                     /// <signature>
                     ///     <summary>Bind handle to prop of node</summary>
                     ///     <param name="node"      type="DOMNode"  >Target node</param>
@@ -526,31 +551,27 @@
                         return res;
                     };
                     var storage = settings.props.STORAGE_PROPERTY,
-                        value   = null;
+                        parent  = parent !== void 0 ? parent : node;
                     if (mutationCross.attach !== null) {
                         if (node !== void 0 && typeof prop === 'string' && typeof handle === 'function') {
                             if (node.nodeName !== void 0) {
                                 if (isValidProp(node, prop)) {
-                                    if (!node[storage]) {
+                                    if (parent[storage] === void 0) {
                                         //Node isn't listening
-                                        node[storage] = props.storage.create(node);
-                                        node[storage].init();
+                                        parent[storage] = props.storage.create(parent);
+                                        parent[storage].init();
                                     }
-                                    storage = node[storage];
-                                    //Prepare prop if needed
-                                    if (!storage.isPropReady(prop)) {
-                                        //First handle for prop
-                                        storage.make(prop);
-                                    }
+                                    storage = parent[storage];
+                                    storage.make(node, prop);
                                     //Add handle
-                                    return storage.add(prop, handle);
+                                    return storage.add(node, prop, handle);
                                 }
                             }
                         }
                         throw 'props.bind::' + errors.objects.INCORRECT_ARGUMENTS;
                     }
                 },
-                unbind  : function (node, prop, id) {
+                unbind  : function (node, prop, id, parent) {
                     /// <signature>
                     ///     <summary>Unbind handle to prop of node by handle's ID</summary>
                     ///     <param name="node"      type="DOMNode"  >Target node</param>
@@ -558,32 +579,30 @@
                     ///     <param name="id"        type="STRING"   >ID of handle</param>
                     ///     <returns type="BOOLEAN"/>
                     /// </signature>
-                    var storage = settings.props.STORAGE_PROPERTY;
+                    var storage = settings.props.STORAGE_PROPERTY,
+                        parent  = parent !== void 0 ? parent : node;
                     if (typeof node === 'object' && typeof prop === 'string' && typeof id === 'string') {
-                        if (node[storage]) {
-                            storage = node[storage];
-                            if (storage.isPropReady(prop)) {
-                                return storage.remove(prop, id);
-                            }
+                        if (parent[storage]) {
+                            storage = parent[storage];
+                            return storage.remove(node, prop, id);
                         }
                         return null;
                     }
                     throw 'props.unbind::' + errors.objects.INCORRECT_ARGUMENTS;
                 },
-                kill    : function (node, prop) {
+                kill    : function (node, prop, parent) {
                     /// <signature>
                     ///     <summary>Unbind all handles, which was attached to prop of node</summary>
                     ///     <param name="node"      type="DOMNode"  >Target node</param>
                     ///     <param name="prop"      type="STRING"   >Prop name</param>
                     ///     <returns type="BOOLEAN"/>
                     /// </signature>
-                    var storage = settings.props.STORAGE_PROPERTY;
+                    var storage = settings.props.STORAGE_PROPERTY,
+                        parent  = parent !== void 0 ? parent : node;
                     if (typeof node === 'object' && typeof prop === 'string') {
-                        if (node[storage]) {
-                            storage = node[storage];
-                            if (storage.isPropReady(prop)) {
-                                return storage.kill(prop);
-                            }
+                        if (parent[storage]) {
+                            storage = parent[storage];
+                            return storage.kill(node, prop);
                         }
                         return null;
                     }
@@ -591,7 +610,7 @@
                 },
             };
             mutationCross   = {
-                init: function () {
+                init                : function () {
                     mutationCross.attach = mutationCross.attach();
                 },
                 //Modern
@@ -664,72 +683,72 @@
                         return objects.kill(this.target, property);
                     });
 
-                    flex.callers.define.node('bindingAttrs.bind',       function (attr, handle) {
-                        return attrs.bind(this.target, attr, handle);
+                    flex.callers.define.node('bindingAttrs.bind',       function (attr, handle, parent) {
+                        return attrs.bind(this.target, attr, handle, parent);
                     });
-                    flex.callers.define.node('bindingAttrs.unbind',     function (attr, id) {
-                        return attrs.unbind(this.target, attr, id);
+                    flex.callers.define.node('bindingAttrs.unbind',     function (attr, id, parent) {
+                        return attrs.unbind(this.target, attr, id, parent);
                     });
-                    flex.callers.define.node('bindingAttrs.kill',       function (attr) {
-                        return attrs.kill(this.target, attr);
+                    flex.callers.define.node('bindingAttrs.kill',       function (attr, parent) {
+                        return attrs.kill(this.target, attr, parent);
                     });
 
-                    flex.callers.define.nodes('bindingAttrs.bind',      function (attr, handle) {
+                    flex.callers.define.nodes('bindingAttrs.bind',      function (attr, handle, parent) {
                         var result = [];
                         SelectorClass();
                         Array.prototype.forEach.call(this.target,       function (target) {
-                            result.push(attrs.bind(target, attr, handle));
+                            result.push(attrs.bind(target, attr, handle, parent));
                         });
                         return result;
                     });
-                    flex.callers.define.nodes('bindingAttrs.unbind',    function (attr, id) {
+                    flex.callers.define.nodes('bindingAttrs.unbind',    function (attr, id, parent) {
                         var result = [];
                         SelectorClass();
                         Array.prototype.forEach.call(this.target,       function (target) {
-                            result.push(attrs.unbind(target, attr, id));
+                            result.push(attrs.unbind(target, attr, id, parent));
                         });
                         return result;
                     });
-                    flex.callers.define.nodes('bindingAttrs.kill',      function (attr) {
+                    flex.callers.define.nodes('bindingAttrs.kill',      function (attr, parent) {
                         var result = [];
                         SelectorClass();
                         Array.prototype.forEach.call(this.target,       function (target) {
-                            result.push(attrs.kill(target, attr));
+                            result.push(attrs.kill(target, attr, parent));
                         });
                         return result;
                     });
 
-                    flex.callers.define.node('bindingProps.bind',       function (prop, handle) {
-                        return props.bind(this.target, prop, handle);
+                    flex.callers.define.node('bindingProps.bind',       function (prop, handle, parent) {
+                        return props.bind(this.target, prop, handle, parent);
                     });
-                    flex.callers.define.node('bindingProps.unbind',     function (prop, id) {
-                        return props.unbind(this.target, prop, id);
+                    flex.callers.define.node('bindingProps.unbind',     function (prop, id, parent) {
+                        return props.unbind(this.target, prop, id, parent);
                     });
-                    flex.callers.define.node('bindingProps.kill',       function (prop) {
-                        return props.kill(this.target, prop);
+                    flex.callers.define.node('bindingProps.kill',       function (prop, parent) {
+                        return props.kill(this.target, prop, parent);
                     });
 
-                    flex.callers.define.nodes('bindingProps.bind',      function (prop, handle) {
+                    flex.callers.define.nodes('bindingProps.bind',      function (prop, handle, parent) {
                         var result = [];
                         SelectorClass();
                         Array.prototype.forEach.call(this.target, function (target) {
-                            result.push(props.bind(target, prop, handle));
+                            result.push(props.bind(target, prop, handle, parent));
                         });
                         return result;
                     });
-                    flex.callers.define.nodes('bindingProps.unbind',    function (prop, id) {
+                    flex.callers.define.nodes('bindingProps.unbind',    function (prop, id, parent) {
                         var result = [];
                         SelectorClass();
                         Array.prototype.forEach.call(this.target, function (target) {
-                            result.push(props.unbind(target, prop, id));
+                            result.push(props.unbind(target, prop, id, parent));
                         });
                         return result;
                     });
-                    flex.callers.define.nodes('bindingProps.kill',      function (prop) {
+                    flex.callers.define.nodes('bindingProps.kill',      function (prop, parent) {
                         var result = [];
                         SelectorClass();
                         Array.prototype.forEach.call(this.target, function (target) {
-                            result.push(props.kill(target, prop));
+                            result.push(props.kill(target, prop, parent));
                         });
                         return result;
                     });
