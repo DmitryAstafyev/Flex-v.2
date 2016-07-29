@@ -279,6 +279,25 @@
                         return value;
                     }
                 });
+                Object.defineProperty(self, "concat", {
+                    configurable    : false,
+                    enumerable      : false,
+                    writable        : false,
+                    value           : function (/*, item_0, item_1, ... item_n */) {
+                        var res = [].concat(original);
+                        for (var i = 0, ln = arguments.length; i < ln; i++) {
+                            if (arguments[i] instanceof Array) {
+                                res = res.concat(arguments[i]);
+                            } else if (arguments[i] instanceof ExArray) {
+                                res = res.concat(arguments[i].getOriginal());
+                            } else {
+                                res.push(arguments[i]);
+                            }
+                        }
+                        return new ExArray(res);
+                        //return res;
+                    }
+                });
                 Object.getOwnPropertyNames(Array.prototype).forEach(function (name) {
                     if (self[name] === void 0) {
                         Object.defineProperty(self, name, {
