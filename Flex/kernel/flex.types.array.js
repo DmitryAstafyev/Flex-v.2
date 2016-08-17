@@ -27,8 +27,8 @@
                     },
                     aliases     = {
                         'set'   : ['update'],
-                        'add'   : ['new', 'push', 'unshift'],
-                        'remove': ['del', 'delete', 'shift', 'pop'],
+                        'add'   : ['add', 'new', 'push', 'unshift'],
+                        'remove': ['remove', 'del', 'delete', 'shift', 'pop'],
                     },
                     errors      = {
                         WRONG_EVENT_NAME        : '0000: WRONG_EVENT_NAME',
@@ -73,6 +73,19 @@
                         });
                     }
                 }
+                function delIndex(index) {
+                    if (self[index] === void 0) {
+                        delete self[index];
+                    }
+                }
+                Object.defineProperty(self, "getOriginal", {
+                    configurable: false,
+                    enumerable  : false,
+                    writable    : false,
+                    value       : function () {
+                        return original;
+                    }
+                });
                 Object.defineProperty(self, "bind", {
                     configurable: false,
                     enumerable  : false,
@@ -131,11 +144,12 @@
                     value           : function () {
                         if (original.length > -1) {
                             var item = original.pop();
-                            delete self[original.length];
+                            delIndex(original.length);
                             executeHandles({
                                 type    : "remove",
                                 index   : original.length,
-                                item    : item
+                                item    : item,
+                                count   : 1
                             });
                             return item;
                         }
@@ -146,13 +160,18 @@
                     enumerable  : false,
                     writable    : false,
                     value       : function () {
-                        for (var i = 0, length = arguments.length; i < length; i++) {
-                            original.push(arguments[i]);
-                            setIndex(original.length - 1);
+                        var added = Array.prototype.filter.call(arguments, function () { return true; }),
+                            start = original.length;
+                        if (added.length > 0) {
+                            added.forEach(function (item) {
+                                original.push(item);
+                                setIndex(original.length - 1);
+                            });
                             executeHandles({
                                 type    : "add",
-                                index   : original.length - 1,
-                                item    : arguments[i]
+                                index   : start,
+                                item    : added,
+                                count   : added.length
                             });
                         }
                         return original.length;
@@ -163,20 +182,17 @@
                     enumerable  : false,
                     writable    : false,
                     value       : function () {
-                        for (var i = 0, ln = arguments.length; i < ln; i++) {
-                            original.splice(i, 0, arguments[i]);
-                            setIndex(original.length - 1);
+                        var added = Array.prototype.filter.call(arguments, function () { return true; });
+                        if (added.length > 0) {
+                            added.forEach(function (item, index) {
+                                original.splice(index, 0, item);
+                                setIndex(index);
+                            });
                             executeHandles({
                                 type    : "add",
-                                index   : i,
-                                item    : arguments[i]
-                            });
-                        }
-                        for (; i < original.length; i++) {
-                            executeHandles({
-                                type    : "set",
-                                index   : i,
-                                item    : original[i]
+                                index   : 0,
+                                item    : added,
+                                count   : added.length
                             });
                         }
                         return original.length;
@@ -190,11 +206,12 @@
                         var item = null;
                         if (original.length > 0) {
                             item = original.shift();
-                            original.length === 0 && delete self[0];
+                            delIndex(original.length);
                             executeHandles({
                                 type    : "remove",
                                 index   : 0,
-                                item    : item
+                                item    : item,
+                                count   : 1
                             });
                             return item;
                         }
@@ -205,31 +222,36 @@
                     enumerable      : false,
                     writable        : false,
                     value           : function (start, count /*, item_0, item_1, ... item_n */) {
-                        var removed = [],
-                            item    = null,
-                            _start  = null;
+                        var added   = [],
+                            removed = [],
+                            item    = null;
                         start   = start !== void 0 ? (start > original.length - 1 ? original.length : start) : 0;
+                        start   = start < 0 ? original.length + start : start;
                         count   = count !== void 0 ? count : original.length - start;
-                        _start  = start < 0 ? original.length + start : start;
-                        while (count--) {
-                            item = original.splice(_start, 1)[0];
-                            removed.push(item);
-                            delete self[original.length];
+                        removed = original.splice(start, count);
+                        if (removed.length > 0) {
                             executeHandles({
                                 type    : "remove",
-                                index   : start + removed.length - 1,
-                                item    : item
+                                index   : start,
+                                item    : removed,
+                                count   : removed.length
                             });
+                            for (var i = removed.length - 1; i >= 0; i -= 1) {
+                                delIndex(original.length + i);
+                            }
                         }
-                        for (var i = 2, ln = arguments.length; i < ln; i++) {
-                            original.splice(_start, 0, arguments[i]);
-                            setIndex(original.length - 1);
+                        added = Array.prototype.slice.call(arguments, 2, arguments.length - 1);
+                        if (added.length > 0) {
+                            added.forEach(function (item, index) {
+                                original.splice(start + index, 0, item);
+                                setIndex(start + index);
+                            });
                             executeHandles({
                                 type    : "add",
-                                index   : _start,
-                                item    : arguments[i]
+                                index   : start,
+                                item    : added,
+                                count   : added.length
                             });
-                            _start++;
                         }
                         return removed;
                     }
