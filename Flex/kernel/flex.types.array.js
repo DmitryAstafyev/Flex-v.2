@@ -1,6 +1,9 @@
-// LICENSE
-// This file (core / module) is released under the MIT License. See [LICENSE] file for details.
-/*global flex*/
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+* Copyright © 2015-2016 Dmitry Astafyev. All rights reserved.                                                      *
+* This file (core / module) is released under the Apache License (Version 2.0). See [LICENSE] file for details.    *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
 /// <reference path='intellisense/flex.callers.node.intellisense.js' />
 /// <reference path='intellisense/flex.callers.nodes.intellisense.js' />
 /// <reference path='intellisense/flex.callers.object.intellisense.js' />
@@ -240,11 +243,11 @@
                                 delIndex(original.length + i);
                             }
                         }
-                        added = Array.prototype.slice.call(arguments, 2, arguments.length - 1);
+                        added = Array.prototype.slice.call(arguments, 2, arguments.length);
                         if (added.length > 0) {
                             added.forEach(function (item, index) {
                                 original.splice(start + index, 0, item);
-                                setIndex(start + index);
+                                setIndex(original.length - 1);
                             });
                             executeHandles({
                                 type    : "add",

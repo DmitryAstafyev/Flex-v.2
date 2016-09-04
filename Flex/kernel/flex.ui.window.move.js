@@ -1,6 +1,9 @@
-// LICENSE
-// This file (core / module) is released under the MIT License. See [LICENSE] file for details.
-/*global flex*/
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+* Copyright © 2015-2016 Dmitry Astafyev. All rights reserved.                                                      *
+* This file (core / module) is released under the Apache License (Version 2.0). See [LICENSE] file for details.    *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
 /// <reference path='intellisense/flex.callers.node.intellisense.js' />
 /// <reference path='intellisense/flex.callers.nodes.intellisense.js' />
 /// <reference path='intellisense/flex.callers.object.intellisense.js' />
@@ -191,14 +194,18 @@
             };
             patterns    = {
                 attach: function () {
-                    flex.events.core.listen(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, function (nodes) {
-                        var context = nodes.length !== void 0 ? (nodes.length > 0 ? nodes[0].parentNode : null) : null;
-                        if (context !== null) {
-                            if (_node('*[' + settings.CONTAINER + ']:not([' + settings.INITED + '])', false, context).target !== null) {
-                                init();
+                    if (flex.oop.namespace.get('flex.registry.events.ui.patterns.GROUP') !== null) {
+                        flex.events.core.listen(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, function (nodes) {
+                            var context = nodes.length !== void 0 ? (nodes.length > 0 ? nodes : null) : null;
+                            if (context !== null) {
+                                context.forEach(function (context) {
+                                    if (_node('*[' + settings.CONTAINER + ']:not([' + settings.INITED + '])', false, context).target !== null) {
+                                        init();
+                                    }
+                                });
                             }
-                        }
-                    });
+                        });
+                    }
                 }
             };
             privates = {
@@ -220,10 +227,7 @@
         flex.modules.attach({
             name            : 'ui.window.move',
             protofunction   : protofunction,
-            reference       : function () {
-                flex.libraries.events   ();
-                flex.libraries.html     ();
-            }
+            reference       : ['flex.events', 'flex.html']
         });
     }
 }());

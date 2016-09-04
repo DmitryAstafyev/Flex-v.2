@@ -1,5 +1,9 @@
-// LICENSE
-// This file (core / module) is released under the MIT License. See [LICENSE] file for details.
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+* Copyright © 2015-2016 Dmitry Astafyev. All rights reserved.                                                      *
+* This file (core / module) is released under the Apache License (Version 2.0). See [LICENSE] file for details.    *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
 /// <reference path='intellisense/flex.callers.node.intellisense.js' />
 /// <reference path='intellisense/flex.callers.nodes.intellisense.js' />
 /// <reference path='intellisense/flex.callers.object.intellisense.js' />
@@ -23,7 +27,6 @@
             config          = {},
             coreEvents      = {},
             options         = {},
-            registry        = {},
             ajax            = {},
             events          = {},
             oop             = {},
@@ -88,7 +91,7 @@
                     ATTACH_PATH_SIGNATURE   : { type: 'string',     value: 'ATTACH::'   },
                     KERNEL_PATH_SIGNATURE   : { type: 'string',     value: 'KERNEL::'   },
                 },
-                patterns    :{
+                patterns    : {
                     TEST_FUNCTION : 'flexPatternTest'
                 },
                 cache       : {
@@ -162,17 +165,41 @@
                         },
                         settings || {}
                     );
+                    if (settings !== void 0) {
+                        patterns.modification();
+                        cache.init();
+                        modules.preload();
+                        asynchronous.preload();
+                    }
                 } else {
                     logs.log('[CORE]:: flex was initialized before. Initialization can be done only once per session.', logs.types.WARNING);
                 }
             },
             get         : function () {
                 return config.defaults;
+            },
+            set         : function (_config) {
+                for (var key in _config) {
+                    if (config.defaults[key] !== void 0 && typeof config.defaults[key] === typeof _config[key]) {
+                        config.defaults[key] = _config[key];
+                    }
+                }
             }
         };
         coreEvents      = {
             onFlexLoad: function () {
-                if (modules.isReady() && external.isReady() && asynchronous.isReady() && modules.attach.unexpected.isReady()) {
+                var inited  = overhead.globaly.get(options.storage.GROUP, options.storage.DEFAULT_CONFIG_FLAG),
+                    ready   = false;
+                if (inited !== null) {
+                    if (modules.isReady() && external.isReady() && asynchronous.isReady() && modules.attach.unexpected.isReady()) {
+                        ready = true;
+                    }
+                } else {
+                    if (modules.isReady() && modules.attach.unexpected.isReady()) {
+                        ready = true;
+                    }
+                }
+                if (ready) {
                     if (coreEvents.onFlexLoad.__inited === void 0) {
                         if (!patterns.execution()) {
                             coreEvents.onFlexLoad.__inited = true;
@@ -191,6 +218,10 @@
                         hashes.update.queue.unlock();
                     } else {
                         logs.log('Double start of [onFlexLoad]', logs.types.CRITICAL);
+                    }
+                } else {
+                    if (modules.attach.unexpected.isReady()) {
+
                     }
                 }
             }
@@ -220,48 +251,12 @@
                     CSS_EXP_IN_URL  : /\.css$/gi
                 }
             },
-            registry    : {
-                EVENTS      : {
-                    source      : 'flex.registry.events.js',
-                    defaults    : {
-                        path    : 'flex.registry.events',
-                        value   : {
-                            system: {
-                                logs    : {
-                                    GROUP       : 'flex.system.logs.messages',
-                                    CRITICAL    : 'critical',
-                                    LOGICAL     : 'logical',
-                                    WARNING     : 'warning',
-                                    NOTIFICATION: 'notification',
-                                    LOGS        : 'log',
-                                    KERNEL_LOGS : 'kernel_logs',
-                                },
-                                cache   : {
-                                    GROUP               : 'flex.system.cache.events',
-                                    ON_NEW_RESOURCE     : 'ON_NEW_RESOURCE',
-                                    ON_UPDATED_RESOURCE : 'ON_UPDATED_RESOURCE',
-                                }
-                            }
-                        }
-                    }
-                },
-                MODULES     : {
-                    source          : 'flex.registry.modules.js',
-                    defaults        : {
-                        path    : 'flex.libraries',
-                        value   : {}
-                    },
-                },
-                SETTINGS     : {
-                    source      : 'flex.settings.js',
-                    defaults    : null
-                },
-            },
             register    : {
-                EXTERNAL_HISTROY    : 'flex.external.history',
-                MODULES_HISTROY     : 'flex.modules.history',
-                RESOURCES_HISTORY   : 'flex.modules.resources.history',
-                ASYNCHRONOUS_HISTORY: 'asynchronous.history',
+                EXTERNAL_HISTROY        : 'flex.external.history',
+                MODULES_HISTROY         : 'flex.modules.history',
+                MODULES_HISTROY_CREATION: 'flex.modules.history.created',
+                RESOURCES_HISTORY       : 'flex.modules.resources.history',
+                ASYNCHRONOUS_HISTORY    : 'asynchronous.history',
             },
             hashes      : {
                 LOCAL_STORAGE_NAME : 'flex.hash.storage'
@@ -271,77 +266,39 @@
                 URL_PARAM_VERSION   : 'flexhash'
             },
             files       : {
-                CORE    : 'flex.core.js', //This is default value, will be apply in case of fail auto-detection
-                CORE_URL: ''
+                CORE    : '', //This is default value, will be apply in case of fail auto-detection
+                CORE_URL: '', //URL to flex core
+                ROOT    : '', //Place, where all JS should be. In ideal for sure.
+                FLEX    : '', //Folder with flex core and modules
+                detect  : function () {
+                    function accept(url) {
+                        url                     = system.url.parse(url.toLowerCase());
+                        options.files.CORE      = url.target;
+                        options.files.CORE_URL  = url.url;
+                        options.files.ROOT      = url.home + '/' + (url.dirs.filter(function(it, i, its){ return i === its.length - 1 ? false : true;})).join('/');
+                        options.files.FLEX      = url.path;
+                        if (url.dirs.length === 0) {
+                            setTimeout(function () {
+                                logs.log('Flex core file [' + url.target + '] attached in root [' + url.home + ']. Recommendation: attach flex\'s libraries (include core) in some subfolder (for example, "core", "flex", "kernel" or any other).', logs.types.NOTIFICATION);
+                            }, 10);
+                        }
+                        return url.path;
+                    };
+                    var url     = system.resources.js.getCurrentSRC(true),
+                        script  = null;
+                    if (url !== null) {
+                        return accept(url);
+                    } else if (options.files.CORE !== '') {
+                        script = document.querySelector('script[src*="' + options.files.CORE + '"]');
+                        if (script !== null) {
+                            return accept(script.src);
+                        }
+                    }
+                    throw new Error('Cannot detect URL and PATH to core script. Setup name of manually [options.files.CORE]');
+                }
             },
             other       : {
                 STORAGE_PREFIX  : '[FLEX_SYSTEM_RESURCES]'
-            }
-        };
-        registry        = {
-            isReady     : function (){
-                return registry.isReady.__ready === void 0 ? false : true;
-            },
-            waiting     : {
-                add     : function (handle) {
-                    var storage = overhead.globaly.get(options.storage.GROUP, options.storage.WAITING_REGISTER_TASKS, { handles: [] });
-                    storage.handles.push(handle);
-                },
-                execute : function () {
-                    var storage = overhead.globaly.get(options.storage.GROUP, options.storage.WAITING_REGISTER_TASKS, { handles: [] });
-                    storage.handles.forEach(function (handle) {
-                        handle();
-                    });
-                }
-            },
-            load        : function () {
-                function getURL(url) {
-                    var path = config.defaults.paths.CORE;
-                    return system.url.sterilize(path + (path === '' ? '' : '/') + url);
-                };
-                for (var item in options.registry) {
-                    (function (url, item) {
-                        system.resources.js.connect(
-                            getURL(url),
-                            function () {
-                                registry.onLoad(item);
-                            },
-                            function () {
-                                registry.onError(item);
-                            }
-                        );
-                    }(options.registry[item].source, item));
-                }
-            },
-            onLoad      : function (item) {
-                options.registry[item].source = true;
-                registry.tryFinish();
-            },
-            onError     : function (item) {
-                var defaults = null;
-                logs.log('Fail load [' + options.registry[item].source + ']. Some flex\'s libraries will not work without that resource.', logs.types.WARNING);
-                if (typeof options.registry[item].defaults === 'object' && options.registry[item].defaults !== null) {
-                    logs.log('Default settings for [' + options.registry[item].source + '] was applied.', logs.types.WARNING);
-                    defaults                        = oop.namespace.create(options.registry[item].defaults.path);
-                    defaults                        = oop.objects.extend(options.registry[item].defaults.value, defaults.target);
-                }
-                options.registry[item].source = true;
-                registry.tryFinish();
-            },
-            tryFinish   : function () {
-                var result = true;
-                for (var item in options.registry) {
-                    result = (options.registry[item].source === true ? result : false);
-                }
-                if (result !== false) {
-                    registry.isReady.__ready = true;
-                    registry.waiting.   execute();
-                    patterns.           modification();
-                    cache.              init();
-                    modules.registry.   ready();
-                    modules.            preload();
-                    asynchronous.       preload();
-                }
             }
         };
         ajax            = {
@@ -1645,7 +1602,7 @@
             },
             preload     : function () {
                 var libraries = config.defaults.resources.MODULES;
-                if (libraries instanceof Array && modules.registry.is_ready !== false) {
+                if (libraries instanceof Array) {
                     if (libraries.length > 0) {
                         overhead.register.open(
                             options.register.MODULES_HISTROY,
@@ -1655,6 +1612,16 @@
                         Array.prototype.forEach.call(
                             libraries,
                             function (library) {
+                                var src = modules.reference.getSource(library);
+                                if (modules.registry.getSettings(library.replace(/^flex\./gi, '')) === null) {
+                                    modules.registry.add({
+                                        name        : library,
+                                        hash        : hashes.get(src),
+                                        autoHash    : true,
+                                        source      : src
+                                    });
+                                }
+                                modules.reference.history.add(library);
                                 modules.repository.call(library);
                             }
                         );
@@ -1664,18 +1631,32 @@
                 }
             },
             reference   : {
-                history: {
+                history     : {
                     data    : [],
                     add     : function (name) {
-                        modules.reference.history.data.push(name);
+                        modules.reference.history.data.push(name.replace('flex.libraries.', '').replace(/^flex\./gi, ''));
                     },
                     isIn    : function (name) {
-                        return (modules.reference.history.data.indexOf(name) !== -1 ? true : false);
+                        return (modules.reference.history.data.indexOf(name.replace('flex.libraries.', '').replace(/^flex\./gi, '')) !== -1 ? true : false);
                     }
                 },
-                caller  : {
+                caller      : {
                     name    : null,
                     ready   : null
+                },
+                getSource   : function(lib){
+                    var parts = lib.split('.'),
+                        src = '';
+                    if (parts.length > 0) {
+                        if (parts[0] === 'flex') {
+                            src = options.files.FLEX + lib;
+                        } else {
+                            src = options.files.ROOT + parts[0] + '/' + lib.replace(parts[0] + '.', '');
+                        }
+                    } else {
+                        src = options.files.ROOT + lib;
+                    }
+                    return src + '.js';
                 },
                 call    : function (library) {
                     var caller  = modules.reference.caller,
@@ -1692,15 +1673,36 @@
                         }
                     }
                 },
-                check   : function (library) {
+                check   : function (library, callback) {
                     var caller          = modules.reference.caller,
-                        storaged        = modules.storage.get(library);
+                        storaged        = modules.storage.get(library),
+                        callback        = typeof callback === 'function' ? callback : false,
+                        waited          = [];
                     if (storaged !== null) {
                         try {
                             caller.name     = library;
                             caller.ready    = true;
-                            if (typeof storaged.reference === 'function') {
-                                storaged.reference();
+                            if (storaged.reference instanceof Array) {
+                                storaged.reference.forEach(function (lib) {
+                                    var src     = modules.reference.getSource(lib),
+                                        name    = modules.tools.fullName(lib.replace(/^flex\./gi, '')),
+                                        constr  = null;
+                                    if (modules.registry.getSettings(lib.replace(/^flex\./gi, '')) === null) {
+                                        modules.registry.add({
+                                            name        : lib,
+                                            hash        : hashes.get(src),
+                                            autoHash    : true,
+                                            source      : src
+                                        });
+                                    }
+                                    if (callback){
+                                        constr = oop.namespace.get(name);
+                                        if (constr === null || constr.create === void 0){
+                                            waited.push(name);
+                                        }
+                                    }
+                                    modules.reference.call(lib);
+                                });
                             }
                         } catch (e) {
                             logs.log('[MODULES]:: module [' + library + '] generated error during request for references:\n\r' + logs.parseError(e), logs.types.CRITICAL);
@@ -1709,7 +1711,29 @@
                             storaged.ready  = caller.ready;
                             caller.name     = null;
                             caller.ready    = null;
+                            if (callback) {
+                                if (waited.length > 0) {
+                                    waited = waited.filter(function (lib) {
+                                        var constr = oop.namespace.get(lib);
+                                        return constr === null ? true : (constr.create === void 0 ? true : false);
+                                    });
+                                    if (waited.length > 0) {
+                                        overhead.register.open(
+                                            options.register.MODULES_HISTROY_CREATION + ':' + library,
+                                            waited,
+                                            callback
+                                        );
+                                        modules.reference.waited.add(library);
+                                    } else {
+                                        callback();
+                                    }
+                                } else {
+                                    callback();
+                                }
+                            }
                         }
+                    } else {
+                        callback && callback();
                     }
                 },
                 pending : function () {
@@ -1723,82 +1747,25 @@
                             }
                         );
                     }
+                },
+                waited  : {
+                    tasks   : [],
+                    add     : function (lib) {
+                        modules.reference.waited.tasks.push(lib);
+                    },
+                    done    : function (lib){
+                        modules.reference.waited.tasks.forEach(function (task) {
+                            overhead.register.done(options.register.MODULES_HISTROY_CREATION + ':' + task, lib);
+                        });
+                    }
                 }
             },
             registry    : {
-                /// <field type="boolean">Flag shows ready modules for loading or not</field>
-                get is_ready() {
-                    return (typeof modules.registry.ready.is_ready !== 'boolean' ? false : true);
-                },
-                ready       : function () {
-                    /// <summary>
-                    /// Start work with modules. Make list, prepare callers etc. 
-                    /// </summary>
-                    /// <returns type="void">void</returns>
-                    var libraries   = flex.libraries;
-                    if (typeof modules.registry.ready.is_ready !== 'boolean') {
-                        modules.registry.validate(libraries);
-                        modules.registry.makeCallers(modules.registry.getList(libraries));
-                        modules.registry.ready.is_ready = true;
-                        events.core.fire('modules.registry', 'ready', null);
-                    }
-                },
-                getList     : function (libraries, list, parent) {
-                    /// <summary>
-                    /// Make list of modules from object with module. 
-                    /// </summary>
-                    /// <param name="libraries" type="Object"   >Link to object with modules    </param>
-                    /// <param name="list"      type="Array"    >Array with list of modules     </param>
-                    /// <param name="parent"    type="Object"   >Link to current parent         </param>
-                    /// <returns type="Array">List of modules</returns>
-                    var list    = list || [],
-                        parent  = parent || false;
-                    for (var property in libraries) {
-                        list.push({ name: (parent !== false ? parent + '.' + property : property) });
-                        if (typeof libraries[property] === 'object' && libraries[property] !== void 0) {
-                            if (libraries[property] !== null){
-                                if (typeof libraries[property].source !== 'string') {
-                                    modules.registry.getList(
-                                        libraries[property],
-                                        list,
-                                        (parent !== false ? parent + '.' + property : property)
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    return list;
-                },
-                validate    : function (libraries, path) {
-                    var path = typeof path === 'string' ? path : '';
-                    for (var property in libraries) {
-                        if (typeof libraries[property] === 'object' && libraries[property] !== null && libraries[property] !== void 0) {
-                            if (typeof libraries[property].source !== 'string') {
-                                modules.registry.validate(libraries[property], path + '.' + property);
-                            } else {
-                                oop.objects.validate(libraries[property], [
-                                    { name: 'source',   type: 'string',     value: null, handle : modules.registry.validateSRC },
-                                    { name: 'hash',     type: 'string',     value: false    },
-                                    { name: 'settings', type: 'object',     value: null     },
-                                    { name: 'autoHash', type: 'boolean',    value: false    },
-                                ]);
-                                if (libraries[property].source === null || libraries[property].source === '') {
-                                    logs.log('[MODULES]:: record in modules list [flex.registry.modules.js] is corrupted. Field [source] does not exist. Check modules list.', logs.types.CRITICAL);
-                                } else {
-                                    if (libraries[property].hash === false || libraries[property].hash === '') {
-                                        libraries[property].autoHash    = true;
-                                        libraries[property].hash        = hashes.get(libraries[property].source);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
                 makeCaller  : function (library){
-                    var property    = oop.namespace.create(library.name, flex.libraries),
+                    var property    = oop.namespace.create(library.name.replace(/^flex\./gi, ''), flex.libraries),
                         full_name   = null;
                     if (property !== null) {
-                        full_name = modules.tools.fullName(library.name);
+                        full_name = modules.tools.fullName(library.name.replace(/^flex\./gi, ''));
                         Object.defineProperty(
                             property.parent,
                             property.name,
@@ -1810,20 +1777,6 @@
                         );
                     }
                 },
-                makeCallers : function (list_libraries) {
-                    /// <summary>
-                    /// Create object of module's callers
-                    /// </summary>
-                    /// <param name="list_libraries" type="Array">Array with list of modules</param>
-                    /// <returns type="void">void</returns>
-                    flex.libraries_data = oop.objects.extend(flex.libraries);
-                    Array.prototype.forEach.call(
-                        list_libraries,
-                        function (library) {
-                            modules.registry.makeCaller(library);
-                        }
-                    );
-                },
                 getSettings : function (name) {
                     /// <summary>
                     /// Get settings of library
@@ -1834,16 +1787,20 @@
                     return oop.namespace.get(name, flex.libraries_data);
                 },
                 add         : function (library) {
-                    //Add to list
-                    var property = oop.namespace.create(library.name, flex.libraries_data);
-                    if (property !== null) {
-                        property.target.name        = library.name;
-                        property.target.source      = library.source;
-                        property.target.hash        = library.hash;
-                        property.target.autoHash    = library.autoHash;
-                        //Add caller
-                        modules.registry.makeCaller(library);
-                        return true;
+                    var property    = null,
+                        name        = library.name.replace(/^flex\./gi, '');
+                    if (modules.registry.getSettings(name) === null) {
+                        //Add to list
+                        property = oop.namespace.create(name, flex.libraries_data);
+                        if (property !== null) {
+                            property.target.name        = library.name;
+                            property.target.source      = library.source;
+                            property.target.hash        = library.hash;
+                            property.target.autoHash    = library.autoHash;
+                            //Add caller
+                            modules.registry.makeCaller(library);
+                            return true;
+                        }
                     }
                     return false;
                 },
@@ -1947,11 +1904,7 @@
                     /// <returns type="boolean">true if success and false if module placed in queue</returns>
                     var queue = modules.attach.queue;
                     queue.add(parameters);
-                    if (modules.registry.is_ready !== false) {
-                        //Registry of libraries is ready
-                        queue.proceed();
-                    }
-                    //Registry of libraries is not ready. We have to wait
+                    queue.proceed();
                     return false;
                 },
                 embody      : {
@@ -1993,53 +1946,75 @@
                         var constructor_storage = null;
                         if (oop.objects.validate(parameters, [  { name: 'name',             type: 'string'                          },
                                                                 { name: 'protofunction',    type: 'function'                        },
-                                                                { name: 'reference',        type: 'function',           value: null },
+                                                                { name: 'reference',        type: 'array',              value: null },
                                                                 { name: 'resources',        type: 'array',              value: []   },
                                                                 { name: 'onBeforeAttach',   type: 'function',           value: null },
                                                                 { name: 'onAfterAttach',    type: 'function',           value: null },
                                                                 { name: 'extend',           type: ['array', 'object'],  value: [] } ]) !== false) {
-                            //Correct namespace
-                            parameters.name = modules.tools.fullName(parameters.name);
-                            //Get link to storage of library. Also it checks is library in registry or not
-                            constructor_storage = oop.namespace.get(parameters.name);
-                            if (constructor_storage !== null && constructor_storage !== false) {
-                                //Check is library attached or not
-                                if (constructor_storage.create === void 0) {
-                                    //Save library data in storage
-                                    if (modules.storage.add(parameters) !== false) {
+                            if (modules.reference.history.isIn(parameters.name)) {
+                                //Module was loaded from separeted file
+                                //Correct namespace
+                                parameters.name     = modules.tools.fullName(parameters.name);
+                                //Get link to storage of library. Also it checks is library in registry or not
+                                constructor_storage = oop.namespace.get(parameters.name);
+                                if (constructor_storage !== null && constructor_storage !== false) {
+                                    //Check is library attached or not
+                                    if (constructor_storage.create === void 0) {
+                                        //Save library data in storage
+                                        modules.storage.add(parameters);
                                         //Make constructor
-                                        constructor_storage.create = modules.attach.embody.createConstructor(parameters.name);
+                                        constructor_storage.create = modules.attach.embody.createConstructor(parameters.name, parameters.protofunction);
                                         if (constructor_storage.create !== null) {
                                             //Add to repository
                                             modules.repository.add(parameters);
                                             //Check references of this library
-                                            modules.reference.check(parameters.name);
-                                            //Start events
-                                            system.handle(parameters.onBeforeAttach);
-                                            //Check resources of module and continue after resources will be loaded
-                                            modules.resources.check(
-                                                parameters.name,
-                                                parameters.resources,
-                                                function () {
-                                                    //Restart references of pending libraries
-                                                    modules.reference.pending();
-                                                    //Mark as done
-                                                    overhead.register.done(options.register.MODULES_HISTROY, parameters.name);
-                                                    //Start events
-                                                    system.handle(parameters.onAfterAttach);
-                                                }
-                                            );
-                                            logs.log('[MODULES]:: [' + parameters.name + '] was initialized.', logs.types.KERNEL_LOGS);
+                                            modules.reference.check(parameters.name, function () {
+                                                //Start events
+                                                system.handle(parameters.onBeforeAttach);
+                                                //Check resources of module and continue after resources will be loaded
+                                                modules.resources.check(
+                                                    parameters.name,
+                                                    parameters.resources,
+                                                    function () {
+                                                        //Restart references of pending libraries
+                                                        modules.reference.pending();
+                                                        //Mark as done
+                                                        overhead.register.done(options.register.MODULES_HISTROY, parameters.name);
+                                                        //Start events
+                                                        system.handle(parameters.onAfterAttach);
+                                                        //Done event
+                                                        modules.reference.waited.done(parameters.name);
+                                                        logs.log('[MODULES]:: [' + parameters.name + '] was initialized.', logs.types.KERNEL_LOGS);
+                                                    }
+                                                );
+                                            });
                                             return true;
                                         }
                                     }
                                 }
+                            } else {
+                                //Module is buildin 
+                                //Add settings
+                                if (modules.registry.getSettings(parameters.name.replace(/^flex\./gi, '')) === null) {
+                                    modules.registry.add({
+                                        name        : parameters.name,
+                                        hash        : null,
+                                        autoHash    : false,
+                                        source      : null
+                                    });
+                                }
+                                //Correct namespace
+                                parameters.name = modules.tools.fullName(parameters.name);
+                                //Add to virtual repository
+                                modules.storage.add(parameters);
+                                //Add to repository
+                                modules.repository.add(parameters);
                             }
                         }
                         return false;
                     },
                 },
-                unexpected: {
+                unexpected  : {
                     isReady     : function(){
                         return modules.attach.unexpected.journal.isReady(true);
                     },
@@ -2113,7 +2088,7 @@
                         reset   : function (handle) {
                             modules.attach.unexpected.launched.storage = null;
                         },
-                        accept  : function (handle) {
+                        accept  : function () {
                             modules.attach.unexpected.launched.storage.forEach(function (handle) {
                                 handle.call(window);
                             });
@@ -2185,12 +2160,6 @@
                         };
                         var requaredPackageID = null,
                             do_not_detect_url = typeof do_not_detect_url === 'boolean' ? do_not_detect_url : false;
-                        if (!registry.isReady()) {
-                            //We have to wait for registry, but URL we should detect now
-                            parameters.src = system.resources.js.getCurrentSRC();
-                            registry.waiting.add(function () { modules.attach.unexpected.safely(parameters, true); });
-                            return false;
-                        }
                         if (oop.objects.validate(parameters, [  { name: 'name',             type: 'string'                          },
                                                                 { name: 'launch',           type: 'function',           value: null },
                                                                 { name: 'constructor',      type: 'function',           value: null },
@@ -2278,7 +2247,7 @@
                                         parameters.protofunction            = parameters.constructor === null ? function(){} : parameters.constructor;
                                         parameters.protofunction.prototype  = parameters.module;
                                         //Make constructor
-                                        constructor_storage.create = modules.attach.embody.createConstructor(parameters.name, parameters.protofunction);
+                                        constructor_storage.create          = modules.attach.embody.createConstructor(parameters.name, parameters.protofunction);
                                         //Accept module
                                         modules.attach.unexpected.journal.modules.done(parameters.src);
                                         return true;
@@ -2451,38 +2420,32 @@
                             unexpected      : parameters.unexpected                 || null,
                         },
                         hash        = modules.repository.getHash(parameters.name);
-                    if (hash !== settings.hash && config.defaults.resources.USE_STORAGED !== false) {
-                        data.constr         = (typeof data.constr           === 'function' ? parsing.js.stringify(data.constr           ) : null);
-                        data.protofunction  = (typeof data.protofunction    === 'function' ? parsing.js.stringify(data.protofunction    ) : null);
-                        data.reference      = (typeof data.reference        === 'function' ? parsing.js.stringify(data.reference        ) : null);
-                        data.onBeforeAttach = (typeof data.onBeforeAttach   === 'function' ? parsing.js.stringify(data.onBeforeAttach   ) : null);
-                        data.onAfterAttach  = (typeof data.reference        === 'function' ? parsing.js.stringify(data.onAfterAttach    ) : null);
-                        if (data.constr !== null && data.protofunction !== null) {
-                            //Log message
-                            logs.log('[MODULES]:: module [' + parameters.name + '] was updated.', logs.types.KERNEL_LOGS);
-                            //Save hash
-                            if (settings.autoHash === true) {
-                                settings.hash = hashes.get(settings.source);
-                                hashes.set(settings.source, settings.hash);
-                                hashes.update.add(settings.source);
-                            }
-                            //Return result
-                            return system.localStorage.set(
-                                parameters.name,
-                                JSON.stringify(
-                                    {
-                                        data: data,
-                                        hash: settings.hash
-                                    }
-                                ),
-                                true,
-                                options.other.STORAGE_PREFIX
-                            );
-                        }
-                    } else {
+                    data.constr         = (typeof data.constr           === 'function'  ? parsing.js.stringify(data.constr           ) : null);
+                    data.protofunction  = (typeof data.protofunction    === 'function'  ? parsing.js.stringify(data.protofunction    ) : null);
+                    data.reference      = (data.reference instanceof Array              ? data.reference                               : null);
+                    data.onBeforeAttach = (typeof data.onBeforeAttach   === 'function'  ? parsing.js.stringify(data.onBeforeAttach   ) : null);
+                    data.onAfterAttach  = (typeof data.onAfterAttach    === 'function'  ? parsing.js.stringify(data.onAfterAttach    ) : null);
+                    if (data.constr !== null && data.protofunction !== null) {
+                        //Log message
+                        logs.log('[MODULES]:: module [' + parameters.name + '] was updated.', logs.types.KERNEL_LOGS);
+                        //Save hash
                         if (settings.autoHash === true) {
+                            settings.hash = hashes.get(settings.source);
+                            hashes.set(settings.source, settings.hash);
                             hashes.update.add(settings.source);
                         }
+                        //Return result
+                        return system.localStorage.set(
+                            parameters.name,
+                            JSON.stringify(
+                                {
+                                    data: data,
+                                    hash: settings.hash
+                                }
+                            ),
+                            true,
+                            options.other.STORAGE_PREFIX
+                        );
                     }
                     return null;
                 },
@@ -2494,18 +2457,16 @@
                     /// <param name="hash" type="string">Control hash for resource</param>
                     /// <returns type="object">Value of resource if success and NULL if not</returns>
                     var localStorage    = system.localStorage,
-                        storaged        = localStorage.get(name, true, options.other.STORAGE_PREFIX);
-                    if (storaged !== null && config.defaults.resources.USE_STORAGED !== false) {
+                        storaged        = localStorage.get(name, true, options.other.STORAGE_PREFIX),
+                        settings        = modules.registry.getSettings(name);
+                    if ((settings.source === null && storaged !== null) || (storaged !== null && config.defaults.resources.USE_STORAGED !== false)) {
                         try{
                             storaged = JSON.parse(storaged);
-                            if (storaged.hash === hash) {
+                            if (storaged.hash === hash || settings.source === null) {
                                 storaged.data.protofunction = parsing.js.parse({
                                     constr  : { params: storaged.data.constr.params,        body: storaged.data.constr.body         },
                                     proto   : { params: storaged.data.protofunction.params, body: storaged.data.protofunction.body  }
                                 });
-                                if (storaged.data.reference !== null) {
-                                    storaged.data.reference = parsing.js.parseFunction(storaged.data.reference.params, storaged.data.reference.body);
-                                }
                                 if (storaged.data.onBeforeAttach !== null) {
                                     storaged.data.onBeforeAttach = parsing.js.parseFunction(storaged.data.onBeforeAttach.params, storaged.data.onBeforeAttach.body);
                                 }
@@ -2523,11 +2484,13 @@
                                 return null;
                             }
                         } catch (e) {
+                            logs.log('[MODULES]:: new module [' + name + '] is detected.', logs.types.WARNING);
                             cache.events.fire.ON_NEW_MODULE(name);
                             localStorage.del(name, options.other.STORAGE_PREFIX);
                             return null;
                         }
                     } else {
+                        logs.log('[MODULES]:: new module [' + name + '] new module is detected.', logs.types.WARNING);
                         cache.events.fire.ON_NEW_MODULE(name);
                     }
                     return null;
@@ -2562,7 +2525,8 @@
                     if (settings !== null) {
                         if (settings.hash !== void 0) {
                             overhead.register.add(options.register.MODULES_HISTROY, modules.tools.clearName(name));
-                            repository = modules.repository.get(modules.tools.fullName(name), settings.hash);
+                            repository = modules.storage.get(modules.tools.fullName(name));
+                            repository = repository !== null ? repository : modules.repository.get(modules.tools.fullName(name), settings.hash);
                             if (repository !== null) {
                                 modules.attach.safely(repository);
                                 return true;
@@ -3545,7 +3509,8 @@
                             }
                             if (do_not_check === false) {
                                 if (this.isReady() !== false) {
-                                    if (this.onReady !== null) {
+                                    if (this.onReady !== null && this.handled === void 0) {
+                                        this.handled = true;
                                         system.handle(this.onReady, null, 'Register: ' + this.name, this);
                                     }
                                     return true;
@@ -4710,33 +4675,34 @@
                                             home        : info.hostname === '' ? window.location.protocol   + '//' + window.location.host   : info.protocol + '//' + info.host,
                                             _home       : info.hostname !== '' ? info.protocol + '//' + info.host : '',
                                             params      : params,
+                                            dirs        : null,
                                             parts       : null
                                         };
-                                        if (result.target.length > 0) {
-                                            if (result.target instanceof Array) {
-                                                result.target = result.target[0];
-                                                if (result.target.indexOf('.') === -1) {
-                                                    result.target = '';
-                                                }
-                                            } else {
+                                        if (result.target instanceof Array && result.target.length > 0) {
+                                            result.target   = result.target[0];
+                                            if (result.target.indexOf('.') === -1) {
                                                 result.target = '';
                                             }
                                             result._path    = url.replace(result.target, '');
-                                            if (result._home === '') {
-                                                result.path = result.home + (result._path.  indexOf('/') === 0 ? '' : '/') + result._path;
-                                                result.url  = result.home + (result._url.   indexOf('/') === 0 ? '' : '/') + result._url;
-                                            } else {
-                                                result.path = result._path;
-                                                result.url  = result._url;
-                                            }
-                                            result.parts = result.url.split('/').map(function (item) {
-                                                return (item === '' ? '//' : item);
-                                            });
-                                            if (result.parts.indexOf(result.target) !== -1) {
-                                                result.parts.splice(result.parts.indexOf(result.target), 1);
-                                            }
-                                            return result;
+                                        } else {
+                                            result.target   = '';
                                         }
+                                        if (result._home === '') {
+                                            result.path = result.home + (result._path.  indexOf('/') === 0 ? '' : '/') + result._path;
+                                            result.url  = result.home + (result._url.   indexOf('/') === 0 ? '' : '/') + result._url;
+                                        } else {
+                                            result.path = result._path;
+                                            result.url  = result._url;
+                                        }
+                                        result.parts = result.url.split('/').map(function (item) {
+                                            return (item === '' ? '//' : item);
+                                        });
+                                        if (result.parts.indexOf(result.target) !== -1) {
+                                            result.parts.splice(result.parts.indexOf(result.target), 1);
+                                        }
+                                        result.dirs = result.path.replace(result.home, '').split('/');
+                                        result.dirs = result.dirs.filter(function (dir) { return dir !== '' ? true : false; });
+                                        return result;
                                     }
                                 }
                             }
@@ -4879,9 +4845,7 @@
                             if (use_cache && !cache[selector] && node !== null) {
                                 cache[selector] = node;
                             }
-                            if (node !== null) {
-                                return new wrappers.constructors.node(node);
-                            }
+                            return new wrappers.constructors.node(node);
                         } else {
                             if (selector !== void 0) {
                                 if (typeof selector.nodeName === 'string' || selector == window) {
@@ -4913,9 +4877,7 @@
                                     cache[selector] = nodes;
                                 }
                             }
-                            if (nodes !== null) {
-                                return new wrappers.constructors.nodes(nodes);
-                            }
+                            return new wrappers.constructors.nodes(nodes);
                         } else {
                             if (selector !== void 0) {
                                 if (typeof selector.length === 'number') {
@@ -4981,14 +4943,13 @@
                             var updated = null;
                             for (var pro in obj) {
                                 if (obj.hasOwnProperty(pro)) {
-                                    if (typeof obj[pro] === 'object') {
+                                    if (typeof obj[pro] === 'object' && pro !== 'target') {
                                         updated = function () { updated.target = this.target; return updated; };
                                         for (var subpro in obj[pro]) {
                                             updated[subpro] = obj[pro][subpro];
                                         }
                                         obj[pro] = updated;
-                                    }
-                                    if (typeof obj[pro] === 'function') {
+                                    } else if (typeof obj[pro] === 'function') {
                                         update(obj[pro]);
                                     }
                                 }
@@ -5222,12 +5183,15 @@
                 get     : hashes.get,
                 update  : hashes.update.add
             },
-            config          : config.get
+            config          : {
+                get: config.get,
+                set: config.set
+            }
         };
+        //Detect core file
+        options.files.detect();
         //Settings of flex
         config.init();
-        //Load registries
-        registry.load();
         //Module events
         events.core.listen('modules.registry', 'ready', modules.attach.queue.proceed);
         //Build wrappers
@@ -5360,11 +5324,38 @@
                     boolean : privates.callers.define.boolean,
                 }
             },
-            config          : privates.config
+            config          : {
+                get: privates.config.get,
+                set: privates.config.set
+            },
+            libraries       : {},
+            libraries_data  : {},
+            registry        : {}
         };
     }());
     //Core of flex is in global space
     window['flex'       ] = new Flex();
+    //Default events
+    flex.registry.events = {
+        system: {
+            logs: {
+                GROUP       : 'flex.system.logs.messages',
+                CRITICAL    : 'critical',
+                LOGICAL     : 'logical',
+                WARNING     : 'warning',
+                NOTIFICATION: 'notification',
+                LOGS        : 'log',
+                KERNEL_LOGS : 'kernel_logs',
+            },
+            cache: {
+                GROUP               : 'flex.system.cache.events',
+                ON_NEW_MODULE       : 'ON_NEW_MODULE',
+                ON_UPDATED_MODULE   : 'ON_UPDATED_MODULE',
+                ON_NEW_RESOURCE     : 'ON_NEW_RESOURCE',
+                ON_UPDATED_RESOURCE : 'ON_UPDATED_RESOURCE',
+            }
+        }
+    };
     //Define short callers
     window['_node'      ] = flex.callers.node;
     window['_nodes'     ] = flex.callers.nodes;

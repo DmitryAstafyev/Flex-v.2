@@ -1,6 +1,9 @@
-// LICENSE
-// This file (core / module) is released under the MIT License. See [LICENSE] file for details.
-/*global flex*/
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+* Copyright © 2015-2016 Dmitry Astafyev. All rights reserved.                                                      *
+* This file (core / module) is released under the Apache License (Version 2.0). See [LICENSE] file for details.    *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
 /// <reference path='intellisense/flex.callers.node.intellisense.js' />
 /// <reference path='intellisense/flex.callers.nodes.intellisense.js' />
 /// <reference path='intellisense/flex.callers.object.intellisense.js' />
@@ -503,6 +506,13 @@
                     return false;
                 }
             };
+            (function () {
+                flex.registry.events.ui             === void 0 && (flex.registry.events.ui = {});
+                flex.registry.events.ui.itemsbox    === void 0 && (flex.registry.events.ui.itemsbox = {
+                    GROUP   : 'flex.ui.itemsbox',
+                    REFRESH : 'refresh',
+                });
+            }());
             privates    = {
                 init    : initializer.init,
             };
@@ -513,10 +523,7 @@
         flex.modules.attach({
             name            : 'ui.itemsbox',
             protofunction   : protofunction,
-            reference       : function () {
-                flex.libraries.events   ();
-                flex.libraries.html     ();
-            },
+            reference       : ['flex.events', 'flex.html'],
             resources       : [
                 { url: 'KERNEL::/css/flex.ui.itemsbox.css' }
             ],

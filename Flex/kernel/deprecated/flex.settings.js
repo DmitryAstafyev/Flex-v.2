@@ -9,12 +9,11 @@
     var init = function () {
             flex.init({
                 resources: {
-                    MODULES         : [
-                        'flex.presentation', 'flex.binds', 'flex.ui.patterns', 'flex.types.array'
+                    MODULES: [
+                        'program.presentation', 'flex.binds', 'flex.ui.patterns', 'flex.types.array'
                     ],
                     EXTERNAL        : [
                         { url: '/program/body.css'  },
-                        { url: '/app/short.js'      },
                     ],
                     ASYNCHRONOUS: [
                         {
@@ -40,7 +39,7 @@
                         //short.getName();
                     },
                     onPageLoad: function () {
-                        var presentation = flex.libraries.presentation.create();
+                        var presentation = flex.libraries.program.presentation.create();
                         presentation.start();
                     }
                 },

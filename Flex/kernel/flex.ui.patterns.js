@@ -1,5 +1,9 @@
-// LICENSE
-// This file (core / module) is released under the MIT License. See [LICENSE] file for details.
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+* Copyright © 2015-2016 Dmitry Astafyev. All rights reserved.                                                      *
+* This file (core / module) is released under the Apache License (Version 2.0). See [LICENSE] file for details.    *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+
 /// <reference path='intellisense/flex.callers.node.intellisense.js' />
 /// <reference path='intellisense/flex.callers.nodes.intellisense.js' />
 /// <reference path='intellisense/flex.callers.object.intellisense.js' />
@@ -21,11 +25,12 @@
             var config          = null,
                 settings        = null,
                 //Classes
-                source          = null,
-                pattern         = null,
+                Source          = null,
+                Pattern         = null,
                 instance        = null,
                 result          = null,
-                caller          = null,
+                Caller          = null,
+                addition        = null,
                 //Methods
                 layout          = null,
                 privates        = null,
@@ -36,14 +41,17 @@
                 helpers         = null,
                 conditions      = null,
                 callers         = null,
-                defaultshooks   = null;
+                defaultshooks   = null,
+                defaultsmap     = null,
+                ExArray         = flex.libraries.types.array.create().ExArray;
             //Config
-            config      = {
+            config          = {
                 values      : {
                     USE_STORAGE_CSS : true,
                     USE_STORAGE_JS  : true,
                     USE_STORAGE_HTML: true,
                     PATTERN_NODE    : 'pattern',
+                    PATTERN_SRC     : 'data-pattern',
                 },
                 validator   : {
                     USE_STORAGE_CSS : function (value) { return typeof value === 'boolean' ? true : false;},
@@ -68,60 +76,67 @@
                     config.values.USE_STORAGE_JS    = false;
                     config.values.USE_STORAGE_HTML  = false;
                     flex.config.set({
-                        SHOWN_LOGS: ['CRITICAL', 'LOGICAL', 'WARNING', 'NOTIFICATION', 'LOGS']
+                        logs: { SHOW: ['CRITICAL', 'LOGICAL', 'WARNING', 'NOTIFICATION', 'LOGS', 'KERNEL_LOGS'] }
                     });
                 }
             };
             //Settings
-            settings    = {
+            settings        = {
                 measuring       : {
                     MEASURE : true,
                 },
                 classes         : {
                     SOURCE  : function(){},
                     PATTERN : function(){},
-                    INSTANCE: function(){},
-                    RESULT  : function(){},
                     CALLER  : function(){},
                 },
                 regs            : {
-                    BODY                : /<\s*body[^>]*>(\n|\r|\s|.)*?<\s*\/body\s*>/gi,
-                    BODY_TAG            : /<\s*body[^>]*>|<\s*\/\s*body\s*>/gi,
-                    BODY_CLEAR          : /^[\n\r\s]*|[\n\r\s]*$/gi,
-                    TABLE               : /<\s*table[^>]*>(\n|\r|\s|.)*?<\s*\/table\s*>/gi,
-                    TABLE_TAG           : /<\s*table[^>]*>|<\s*\/\s*table\s*>/gi,
-                    ANY_TAG             : /<\s*[\w]{1,}[^>]*>(\n|\r|\s|\t|.)*<\s*\/\s*\w{1,}\s*>/gi,
-                    FIRST_TAG           : /^\<.*?\>/gi,
-                    TAG_BORDERS         : /<|>/gi,
-                    CSS                 : /<link\s+.*?\/>|<link\s+.*?\>/gi,
-                    CSS_HREF            : /href\s*\=\s*"(.*?)"|href\s*\=\s*'(.*?)'/gi,
-                    CSS_REL             : /rel\s*=\s*"stylesheet"|rel\s*=\s*'stylesheet'/gi,
-                    CSS_TYPE            : /type\s*=\s*"text\/css"|type\s*=\s*'text\/css'/gi,
-                    JS                  : /<script\s+.*?>/gi,
-                    JS_SRC              : /src\s*\=\s*"(.*?)"|src\s*\=\s*'(.*?)'/gi,
-                    JS_TYPE             : /type\s*=\s*"text\/javascript"|type\s*=\s*'text\/javascript'/gi,
-                    STRING              : /"(.*?)"|'(.*?)'/gi,
-                    STRING_BORDERS      : /"|'/gi,
-                    DOM                 : /\{\{\$[\w\.\,]*?\}\}/gi,
-                    DOM_OPEN            : '\\{\\{\\$',
-                    DOM_CLOSE           : '\\}\\}',
-                    HOOK                : /\{\{[\w\.]*?\}\}/gi,
-                    MODEL               : /\{\{\:\:\w*?\}\}/gi,
-                    MODEL_BORDERS       : /\{\{\:\:|\}\}/gi,
-                    MODEL_OPEN          : '\\{\\{\\:\\:',
-                    MODEL_CLOSE         : '\\}\\}',
-                    HOOK_OPEN           : '\\{\\{',
-                    HOOK_CLOSE          : '\\}\\}',
-                    HOOK_OPEN_COM       : '<\\!--\\{\\{',
-                    HOOK_CLOSE_COM      : '\\}\\}-->',
-                    HOOK_BORDERS        : /\{\{|\}\}/gi,
-                    GROUP_PROPERTY      : /__\w*?__/gi,
-                    FIRST_WORD          : /^\w+/gi,
-                    NOT_WORDS_NUMBERS   : /[^\w\d]/gi,
-                    CONDITION_STRUCTURE : /^\w*=/gi
-                },
-                marks           : {
-                    DOM         : 'DOM',
+                    BODY                    : /<\s*body[^>]*>(\n|\r|\s|.)*?<\s*\/body\s*>/gi,
+                    BODY_TAG                : /<\s*body[^>]*>|<\s*\/\s*body\s*>/gi,
+                    BODY_CLEAR              : /^[\n\r\s]*|[\n\r\s]*$/gi,
+                    FIRST_TAG               : /^\s*<\s*\w{1,}/gi,
+                    TAG_BORDERS             : /<|>/gi,
+                    CSS                     : /<link\s+.*?\/>|<link\s+.*?\>/gi,
+                    CSS_HREF                : /href\s*\=\s*"(.*?)"|href\s*\=\s*'(.*?)'/gi,
+                    CSS_REL                 : /rel\s*=\s*"stylesheet"|rel\s*=\s*'stylesheet'/gi,
+                    CSS_TYPE                : /type\s*=\s*"text\/css"|type\s*=\s*'text\/css'/gi,
+                    JS                      : /<script\s+.*?>/gi,
+                    JS_SRC                  : /src\s*\=\s*"(.*?)"|src\s*\=\s*'(.*?)'/gi,
+                    JS_TYPE                 : /type\s*=\s*"text\/javascript"|type\s*=\s*'text\/javascript'/gi,
+                    STRING                  : /"(.*?)"|'(.*?)'/gi,
+                    STRING_BORDERS          : /"|'/gi,
+                    DOM                     : /\{\{\$[\w\.\,]*?\}\}/gi,
+                    DOM_OPEN_STR            : '{{$',
+                    DOM_CLOSE_STR           : '}}',
+                    HOOK                    : /\{\{[\w\d_\.]*?\}\}/gi,
+                    MODEL                   : /\{\{\:\:[\w\d_\.]*?\}\}/gi,
+                    MODEL_BORDERS           : /\{\{\:\:|\}\}/gi,
+                    HOOK_OPEN               : '\\{\\{',
+                    HOOK_CLOSE              : '\\}\\}',
+                    HOOK_BORDERS            : /\{\{|\}\}/gi,
+                    CONDITIONS              : /<!--[\w_]*=.{1,}-->/gi,
+                    CONDITION_CONTENT       : '<!--[open]-->(\\n|\\r|\\s|.)*?<!--[close]-->',
+                    CONDITION_CONTENT_ANY   : '<!--[open]=.{1,}-->(\\n|\\r|\\s|.)*?<!--[close]-->',
+                    STRING_CON              : /".*?"/gi,
+                    STRING_CON_STR          : '".*"',
+                    STRING_CON_STRICT       : '".*?"',
+                    STRING_BORDER_CON       : /"/gi,
+                    CON_CLOSE_STR           : '<!--[name]-->',
+                    OPEN_TAG                : /<[\s]*[\w]{1,}/gi,
+                    COMMENT_BORDERS         : /<!--|-->/gi,
+                    FIRST_WORD              : /^\w+/gi,
+                    //New regs
+                    TAGS                    : /<\s*\w[^>\/]*.*?>/gi,
+                    ATTRS                   : /([\w-]{1,}\s*=\s*".{1,}?")|([\w-]{1,}\s*=\s*'.{1,}?')/gi,
+                    DOM_BORDERS             : /\{\{\$|\}\}/gi,
+                    MODEL_OPEN_STR          : '{{::',
+                    MODEL_CLOSE_STR         : '}}',
+                    HOOK_OPEN_STR           : '{{',
+                    HOOK_CLOSE_STR          : '}}',
+                    ALL                     : /\{\{.*?\}\}/gi,
+                    INSIDE_TAG              : />(.*?)</gi,
+                    EVENT_ATTR              : /[\w]{1,}(\s{1,})?=(\s{1,})?["']\{\{\@[\w\d_\.]*?\}\}["']/gi,
+                    EVENT_BORDERS           : /\{\{\@|\}\}/gi,
                 },
                 storage         : {
                     USE_LOCALSTORAGE        : true,
@@ -130,13 +145,13 @@
                     CSS_ATTACHED_JOURNAL    : 'FLEX_UI_PATTERNS_CSS_JOURNAL',
                     JS_ATTACHED_JOURNAL     : 'JS_ATTACHED_JOURNAL',
                     PRELOAD_TRACKER         : 'FLEX_UI_PATTERNS_PRELOAD_TRACKER',
-                    NODE_BINDING_DATA       : 'FLEX_PATTERNS_BINDINGS_DATA',
                     CONTROLLERS_LINKS       : 'FLEX_PATTERNS_CONTROLLERS_LINKS',
                     CONTROLLERS_STORAGE     : 'FLEX_PATTERNS_CONTROLLERS_STORAGE',
                     CONDITIONS_STORAGE      : 'FLEX_PATTERNS_CONDITIONS_STORAGE',
                     HOOKS_STORAGE           : 'FLEX_PATTERNS_HOOKS_STORAGE',
+                    MAPS_STORAGE            : 'FLEX_PATTERNS_MAPS_STORAGE',
                     PATTERN_SOURCES         : 'FLEX_PATTERNS_PATTERN_SOURCES',
-                    PATTERNS                : 'FLEX_PATTERNS_PATTERNS',
+                    GLOBAL_EVENTS           : 'FLEX_PATTERNS_GLOBAL_EVENTS'
                 },
                 compatibility   : {
                     PARENT_TO_CHILD : {
@@ -160,67 +175,73 @@
                 },
                 css             : {
                     classes     : {
-                        HOOK_WRAPPER    : 'flex_patterns_hook_wrapper'
+                        MODEL_NODE  : 'data-flex-model-node',
                     },
                     attrs       : {
-                        MODEL_DATA      : 'data-flex-model-data',
-                        DOM_MARK        : 'data-flex-dom-mark',
+                        MODEL       : 'data-flex-model-data',
+                        DOM         : 'data-flex-pattern-dom',
+                        CONDITION   : 'data-flex-pattern-condition',
+                        PARENT      : 'data-flex-pattern-parrent'
                     },
                     selectors   : {
                         HOOK_WRAPPERS: '.flex_patterns_hook_wrapper'
                     },
                 },
+                events          : {
+                    ONREADY     : 'onReady',
+                    ONUPDATE    : 'onUpdate',
+                    SETINSTNCE  : 'setInstance'
+                },
                 other           : {
-                    INDEXES     : '__indexes'
+                    INDEXES             : '__indexes',
+                    SUBLEVEL_BEGIN      : '_',
+                    SUBLEVEL_END        : '_',
+                    BIND_PREFIX         : '$$',
+                    DOM_PREFIX          : '$',
+                    PARENT_MARK_HTML    : '##parent##',
+                    ANCHOR              : 'ANCHOR::',
+                    EVENTS_HANDLE_ID    : 'flex_patterns_listener_handle_id',
+                    PATH                : '__path',
+                    PATTERN_TAG         : 'pattern'         
                 }
             };
-            logs        = {
+            logs            = {
                 SIGNATURE   : '[flex.ui.patterns]', 
                 source      : {
-                    TEMPLATE_WAS_LOADED     : '0001:TEMPLATE_WAS_LOADED',
-                    FAIL_TO_LOAD_TEMPLATE   : '0002:FAIL_TO_LOAD_TEMPLATE',
-                    FAIL_TO_PARSE_TEMPLATE  : '0003:FAIL_TO_PARSE_TEMPLATE',
-                    FAIL_TO_LOAD_JS_RESOURCE: '0004:FAIL_TO_LOAD_JS_RESOURCE',
+                    TEMPLATE_WAS_LOADED                     : '0001:TEMPLATE_WAS_LOADED',
+                    FAIL_TO_LOAD_TEMPLATE                   : '0002:FAIL_TO_LOAD_TEMPLATE',
+                    FAIL_TO_PARSE_TEMPLATE                  : '0003:FAIL_TO_PARSE_TEMPLATE',
+                    FAIL_TO_LOAD_JS_RESOURCE                : '0004:FAIL_TO_LOAD_JS_RESOURCE',
+                    ONLY_ONE_MODEL_REF_CAN_BE_IN_ATTR       : '0005: ONLY_ONE_MODEL_REF_CAN_BE_IN_ATTR',
+                    BAD_FORMAT_OF_STYLE_IN_ATTRIBUTE        : '0006: BAD_FORMAT_OF_STYLE_IN_ATTRIBUTE',
+                    ONLY_ONE_MODEL_REF_CAN_BE_IN_STYLE_PROP : '0007: ONLY_ONE_MODEL_REF_CAN_BE_IN_STYLE_PROP',
+                    FAIL_TO_LOAD_PATTERN_IN_COMPONENT       : '0008: FAIL_TO_LOAD_PATTERN_IN_COMPONENT',
                 },
                 pattern     : {
-                    CANNOT_FIND_FIRST_TAG               : '1000:CANNOT_FIND_FIRST_TAG',
-                    CANNOT_CREATE_WRAPPER               : '1001:CANNOT_CREATE_WRAPPER',
-                    WRONG_PATTERN_WRAPPER               : '1002:WRONG_PATTERN_WRAPPER',
-                    WRONG_HOOK_VALUE                    : '1003:WRONG_HOOK_VALUE',
-                    WRONG_CONDITION_DEFINITION          : '1004:WRONG_CONDITION_DEFINITION',
-                    MODEL_HOOK_NEEDS_WRAPPER            : '1005:MODEL_HOOK_NEEDS_WRAPPER',
-                    CANNOT_FIND_CONDITION_BEGINING      : '1006:CANNOT_FIND_CONDITION_BEGINING',
-                    CANNOT_FIND_CONDITION_END           : '1007:CANNOT_FIND_CONDITION_END',
-                    CANNOT_FIND_CONDITION_NODES         : '1008:CANNOT_FIND_CONDITION_NODES',
-                    CANNOT_FIND_CONDITION_VALUE         : '1009:CANNOT_FIND_CONDITION_VALUE',
-                    UNEXCEPTED_ERROR_CONDITION_PARSER   : '1010:UNEXCEPTED_ERROR_CONDITION_PARSER',
-                },
-                instance    : {
-                    BAD_HOOK_FOR_CLONE      : '2000:BAD_HOOK_FOR_CLONE',
-                    NO_URL_FOR_CLONE_HOOK   : '2001:NO_URL_FOR_CLONE_HOOK',
+                    CANNOT_FIND_SOURCE_OF_TEMPLATE          : '1000:CANNOT_FIND_SOURCE_OF_TEMPLATE',
+                    CANNOT_DETECT_HOOK_VALUE                : '1001:CANNOT_DETECT_HOOK_VALUE',
+                    CANNOT_DETECT_HOOK_ANCHOR               : '1002:CANNOT_DETECT_HOOK_ANCHOR',
                 },
                 caller      : {
-                    CANNOT_INIT_PATTERN             : '3000:CANNOT_INIT_PATTERN',
-                    CANNOT_GET_CHILD_PATTERN        : '3001:CANNOT_GET_CHILD_PATTERN',
-                    CANNOT_GET_PATTERN              : '3002:CANNOT_GET_PATTERN',
-                    PATTERN_WITHOUT_SRC             : '3003:PATTERN_WITHOUT_SRC',
-                    CANNOT_FIND_ROOT_TEMPLATE       : '3004:CANNOT_FIND_ROOT_TEMPLATE',
-                    ONLY_ONE_TEMPLATE_ON_SAME_LEVEL : '3005:ONLY_ONE_TEMPLATE_ON_SAME_LEVEL',
+                    CANNOT_INIT_PATTERN                     : '3000:CANNOT_INIT_PATTERN',
                 },
-                layout      : {
-                    BAD_ARRAY_OF_HOOKS      : '4000:BAD_ARRAY_OF_HOOKS',
-                }
+                controller  : {
+                    CONTROLLER_DEFINED_MORE_THAN_ONCE       : '4000:CONTROLLER_DEFINED_MORE_THAN_ONCE',
+                },
             };
             //Classes implementations
             //BEGIN: source class ===============================================
-            source      = {
+            Source          = {
                 proto       : function (privates) {
                     var self        = this,
                         load        = null,
                         parse       = null,
                         process     = null,
                         resources   = null,
+                        html        = null,
                         get         = null,
+                        processing  = null,
+                        component   = null,
                         callback    = null,
                         signature   = null,
                         returning   = null;
@@ -239,12 +260,11 @@
                                     flex.ajax.methods.GET,
                                     null,
                                     {
-                                        success: function (response, request) {
+                                        success : function (response, request) {
                                             measuring.measure(perf_id, 'loading sources for (' + self.url + ')');
-                                            storage.add(self.url, response);
-                                            process(response, success, fail);
+                                            process(response.original, success, fail);
                                         },
-                                        fail: function (response, request) {
+                                        fail    : function (response, request) {
                                             measuring.measure(perf_id, 'loading sources for (' + self.url + ')');
                                             flex.logs.log(signature() + logs.source.FAIL_TO_LOAD_TEMPLATE, flex.logs.types.CRITICAL);
                                             callback(fail);
@@ -273,18 +293,24 @@
                             }
                             return hrefs;
                         },
-                        html: function (html) {
+                        html: function (html, success, fail) {
                             var regs = settings.regs,
                                 body = html.match(regs.BODY);
                             if (body !== null) {
                                 if (body.length === 1) {
                                     privates.html       = body[0].replace(regs.BODY_TAG, '').replace(regs.BODY_CLEAR, '');
                                     privates.original   = html;
-                                    privates.html       = helpers.tableFix(privates.html);
+                                    if (!component.getSRCs()) {
+                                        processing.procced();
+                                        success();
+                                    } else {
+                                        component.load(success);
+                                    }
                                     return true;
                                 }
                             }
                             privates.html = null;
+                            fail();
                             return false;
                         },
                         css : function () {
@@ -354,12 +380,21 @@
                         },
                     };
                     process     = function (response, success, fail) {
-                        if (parse.html(response.original)) {
-                            parse.js();
-                            parse.css();
+                        function load(storaged) {
                             resources.css.load(function () {
                                 resources.js.load(
                                     function () {
+                                        if (!storaged) {
+                                            storage.add(self.url, {
+                                                original: privates.original,
+                                                html    : privates.html,
+                                                js      : privates.js,
+                                                css     : privates.css,
+                                                map     : privates.map,
+                                                flags   : privates.flags
+                                            });
+                                        }
+                                        component
                                         callback(success);
                                     },
                                     function () {
@@ -367,9 +402,28 @@
                                     }
                                 );
                             });
-                        } else {
-                            flex.logs.log(signature() + logs.source.FAIL_TO_PARSE_TEMPLATE, flex.logs.types.NOTIFICATION);
-                            callback(fail);
+                        };
+                        if (typeof response === 'string') {
+                            parse.html(
+                                response,
+                                function () {
+                                    parse.js();
+                                    parse.css();
+                                    load(false);
+                                },
+                                function () {
+                                    flex.logs.log(signature() + logs.source.FAIL_TO_PARSE_TEMPLATE, flex.logs.types.NOTIFICATION);
+                                    callback(fail);
+                                }
+                             );
+                        } else if (typeof response === 'object') {
+                            privates.original   = response.original;
+                            privates.html       = response.html;
+                            privates.js         = response.js;
+                            privates.css        = response.css;
+                            privates.map        = response.map;
+                            privates.flags      = response.flags;
+                            load(true);
                         }
                     };
                     resources   = {
@@ -482,19 +536,495 @@
                             callback.call(privates.__instance, self.url, self.original_url, privates.__instance);
                         }
                     };
-                    get         = {
-                        html: function () { return privates.html; }
+                    component   = {
+                        getSRCs     : function () {
+                            function find(nodes, hooks) {
+                                Array.prototype.forEach.call(nodes, function (node) {
+                                    var src         = node.getAttribute(config.get().PATTERN_SRC),
+                                        nodeName    = null;
+                                    if (src !== null && src !== '') {
+                                        !~privates.srcs.indexOf(src) && privates.srcs.push(src);
+                                        nodeName = node.nodeName.toLowerCase();
+                                        if (nodeName === config.get().PATTERN_NODE) {
+                                            hooks.src   = src;
+                                            hooks.hooks = {};
+                                            node.children !== void 0 && find(node.children, hooks.hooks);
+                                        } else {
+                                            hooks[nodeName] = {
+                                                src     : src,
+                                                hooks   : {}
+                                            };
+                                            node.children !== void 0 && find(node.children, hooks[nodeName].hooks);
+                                        }
+                                    }
+                                });
+                            };
+                            var node = document.createElement('DIV');
+                            node.innerHTML          = privates.html;
+                            privates.srcs           = [];
+                            privates.map.component  = {};
+                            find(node.children, privates.map.component);
+                            privates.srcs.length === 0 && (privates.map.component   = null);
+                            privates.srcs.length === 0 && (privates.srcs            = null);
+                            return privates.srcs !== null;
+                        },
+                        load        : function (success) {
+                            Source.init(privates.srcs, success, component.onFail);
+                        },
+                        onFail      : function () {
+                            var SourceError = function () {
+                                    this.urls       = privates.srcs;
+                                    this.code       = logs.source.FAIL_TO_LOAD_PATTERN_IN_COMPONENT;
+                                    this.message    = signature() + logs.source.FAIL_TO_LOAD_PATTERN_IN_COMPONENT + ':: URLs = ' + JSON.stringify(privates.srcs);
+                                },
+                                error = new SourceError();
+                            flex.logs.log(error.message, flex.logs.types.CRITICAL);
+                            throw error;
+                        },
+                    },
+                    processing  = {
+                        map         : {
+                            getting : function (match, clear, dest, indexes) {
+                                var refs    = privates.html.match(match),
+                                    map     = {};
+                                if (refs instanceof Array) {
+                                    refs.forEach(function (ref) {
+                                        ref = ref.replace(clear, '');
+                                        ref = ref.split(',');
+                                        if (ref instanceof Array) {
+                                            ref.forEach(function (ref) {
+                                                map[ref] = indexes ? (map[ref] === void 0 ? 1 : map[ref] += 1) : true;
+                                            });
+                                        }
+                                    });
+                                }
+                                privates.map[dest] = map;
+                            },
+                            model   : function () {
+                                processing.map.getting(settings.regs.MODEL, settings.regs.MODEL_BORDERS, 'model', false);
+                            },
+                            dom     : function () {
+                                processing.map.getting(settings.regs.DOM, settings.regs.DOM_BORDERS, 'dom', true);
+                            }
+                        },
+                        binding     : {
+                            model: function () {
+                                function processing(map){
+                                    var binds = {};
+                                    _object(map).forEach(function (prop, value) {
+                                        var _prop = settings.other.BIND_PREFIX + prop;
+                                        if (typeof value === 'object') {
+                                            binds[prop] = processing(value);
+                                        } else if (value === true) {
+                                            Object.defineProperty(binds, prop, {
+                                                get         : function(){
+                                                    return this[_prop].val;
+                                                },
+                                                set         : function (val) {
+                                                    var prev = this[_prop].val;
+                                                    this[_prop].val = val;
+                                                    this[_prop].handle(val, prev);
+                                                },
+                                                configurable: true,
+                                                enumerable  : true
+                                            });
+                                            binds[_prop] = {
+                                                val     : '',
+                                                handles : {},
+                                                bind    : function (handle) {
+                                                    var id = null;
+                                                    if (typeof handle === 'function') {
+                                                        id = flex.unique();
+                                                        this.handles[id] = handle;
+                                                    }
+                                                    return id;
+                                                },
+                                                unbind  : function (id) {
+                                                    if (this.handles[id] !== void 0) {
+                                                        delete this.handles[id];
+                                                        return true;
+                                                    }
+                                                    return false;
+                                                },
+                                                handle  : function (current, previous) {
+                                                    _object(this.handles).forEach(function (id, handle) {
+                                                        handle(current, previous);
+                                                    });
+                                                }
+                                            };
+                                            binds[_prop].bind.bind(binds[_prop]);
+                                            binds[_prop].unbind.bind(binds[_prop]);
+                                            binds[_prop].handle.bind(binds[_prop]);
+                                        }
+                                    });
+                                    return binds;
+                                };
+                                var model               = privates.binding.model === null ? (privates.map.model !== null ? processing(privates.map.model) : null) : privates.binding.model;
+                                privates.binding.model  = model;
+                                return model;
+                            }
+                        },
+                        attrs       : {
+                            parse       : function (str) {
+                                var parts = str.split('=');
+                                return {
+                                    name    : parts[0].replace(/\s/gi, ''),
+                                    value   : (parts[1].replace(/^\s*|\s*$/gi, '')).replace(/(^"|"$)|(^'|'$)/gi, '')
+                                };
+                            },
+                            parseStyle  : function (value) {
+                                var props   = value.split(';'),
+                                    res     = [];
+                                props.forEach(function (prop) {
+                                    var id      = flex.unique(),
+                                        prop    = prop.replace(/::/gi, id),
+                                        parts   = prop.split(':');
+                                    if (prop !== '') {
+                                        if (parts.length === 2) {
+                                            res.push({
+                                                name : parts[0].replace(/\s/, ''),
+                                                value: parts[1].replace(/^\s*|\s*$/, '').replace(new RegExp(id, 'gi'), '::')
+                                            });
+                                        } else {
+                                            flex.logs.log(signature() + logs.source.BAD_FORMAT_OF_STYLE_IN_ATTRIBUTE + '. Style value in attr: (' + value + ')', flex.logs.types.WARNING);
+                                        }
+                                    }
+                                });
+                                return res;
+                            }
+                        },
+                        fix         : function(){
+                            var all = privates.html.match(settings.regs.ALL);
+                            if (all instanceof Array) {
+                                all.forEach(function (elem) {
+                                    privates.html = privates.html.replace(elem, elem.replace(/\s|\t|\r|\n/gi, ''));
+                                });
+                            }
+                        },
+                        tags        : {
+                            get     : function () {
+                                var result = null;
+                                if (self.tags === void 0) {
+                                    result      = privates.html.match(settings.regs.TAGS);
+                                    result      = result instanceof Array ? result : [];
+                                    self.tags   = [];
+                                    result.forEach(function (tag) {
+                                        self.tags.push({
+                                            org: tag,
+                                            mod: tag
+                                        });
+                                    });
+                                }
+                                return self.tags;
+                            },
+                            accept  : function () {
+                                if (self.tags instanceof Array) {
+                                    self.tags.forEach(function (tag) {
+                                        privates.html = privates.html.replace(tag.org, tag.mod);
+                                    });
+                                }
+                            }
+                        },
+                        hooks       : {
+                            find: function () {
+                                var regs    = settings.regs,
+                                    hooks   = privates.html.match(regs.HOOK);
+                                if (hooks instanceof Array) {
+                                    hooks.forEach(function (hook) {
+                                        var _hook = hook.replace(regs.HOOK_BORDERS, '');
+                                        privates.html = privates.html.replace(hook, regs.HOOK_OPEN_STR + settings.other.PARENT_MARK_HTML + _hook + regs.HOOK_CLOSE_STR);
+                                    });
+                                }
+                            }
+                        },
+                        dom         : {
+                            find: function () {
+                                var tags = processing.tags.get(),
+                                    regs = settings.regs;
+                                tags.forEach(function (tag, index) {
+                                    var dom     = tag.mod.match(regs.DOM),
+                                        marks   = [];
+                                    if (dom instanceof Array) {
+                                        dom.forEach(function (_dom) {
+                                            var mark = _dom.replace(regs.DOM_BORDERS, '').split(',');
+                                            marks = marks.concat(mark.filter(function (val) { return val !== '' ? true : false }));
+                                        });
+                                        (function () {
+                                            var history = [];
+                                            marks = marks.filter(function (val) {
+                                                if (history.indexOf(val) === -1) {
+                                                    history.push(val);
+                                                    return true;
+                                                } else {
+                                                    return false;
+                                                }
+                                            });
+                                        }());
+                                        marks = marks.map(function (val) {
+                                            return settings.other.PARENT_MARK_HTML + val;
+                                        });
+                                        if (tag.tag === void 0) {
+                                            tag.tag = tag.mod.match(regs.OPEN_TAG)[0];
+                                        }
+                                        tag.mod = tag.mod.replace(regs.DOM, '');
+                                        tag.mod = tag.mod.replace(tag.tag, tag.tag + ' ' + settings.css.attrs.DOM + '="' + marks.join(',') + '" ');
+                                    }
+                                });
+                            }
+                        },
+                        model       : {
+                            inAttrs: function (){
+                                var tags = processing.tags.get(),
+                                    regs = settings.regs;
+                                tags.forEach(function (tag, index) {
+                                    var scheme  = {},
+                                        attrs   = null;
+                                    if (helpers.testReg(regs.MODEL, tag.mod)) {
+                                        attrs = tag.mod.match(regs.ATTRS);
+                                        if (attrs instanceof Array) {
+                                            attrs.forEach(function (attr) {
+                                                var _attr   = null,
+                                                    models  = null,
+                                                    styles  = null;
+                                                if (helpers.testReg(regs.MODEL, attr)) {
+                                                    _attr   = processing.attrs.parse(attr);
+                                                    if (_attr.name === 'style') {
+                                                        styles = processing.attrs.parseStyle(_attr.value);
+                                                        styles.forEach(function (pair) {
+                                                            models = pair.value.match(regs.MODEL);
+                                                            if (models instanceof Array) {
+                                                                if (models.length > 1) {
+                                                                    flex.logs.log(signature() + logs.source.ONLY_ONE_MODEL_REF_CAN_BE_IN_STYLE_PROP + '. HTML fragment: (' + tag.mod + '), Style prop: (' + pair.value + ')', flex.logs.types.WARNING);
+                                                                }
+                                                                models                          = models[0];
+                                                                scheme['style.' + pair.name]    = settings.other.PARENT_MARK_HTML + models.replace(regs.MODEL_BORDERS, '');
+                                                            }
+                                                        });
+                                                    } else {
+                                                        models = _attr.value.match(regs.MODEL);
+                                                        if (models instanceof Array) {
+                                                            if (models.length > 1) {
+                                                                flex.logs.log(signature() + logs.source.ONLY_ONE_MODEL_REF_CAN_BE_IN_ATTR + '. HTML fragment: (' + tag.mod + '), Attr: (' + _attr.name + ')', flex.logs.types.WARNING);
+                                                            }
+                                                            models              = models[0];
+                                                            scheme[_attr.name]  = settings.other.PARENT_MARK_HTML + models.replace(regs.MODEL_BORDERS, '');
+                                                        }
+                                                    }
+                                                    tag.mod = tag.mod.replace(attr, '');
+                                                }
+                                            });
+                                        }
+                                        if (Object.keys(scheme).length > 0) {
+                                            if (tag.tag === void 0) {
+                                                tag.tag = tag.mod.match(regs.OPEN_TAG)[0];
+                                            }
+                                            tag.mod                     = tag.mod.replace(tag.tag, tag.tag + ' ' + settings.css.attrs.MODEL + "='" + JSON.stringify(scheme) + "' ");
+                                            privates.flags.has_model    = true;
+                                        }
+                                    }
+                                });
+                            },
+                            inNodes: function () {
+                                var regs        = settings.regs,
+                                    contents    = privates.html.match(regs.INSIDE_TAG);
+                                if (contents instanceof Array) {
+                                    contents.forEach(function (content) {
+                                        var elems       = null,
+                                            _content    = content;
+                                        if (helpers.testReg(regs.MODEL, content)) {
+                                            elems = _content.match(regs.MODEL);
+                                            elems.forEach(function (elem) {
+                                                var _elem = elem.replace(regs.MODEL_BORDERS, '');
+                                                _elem = regs.MODEL_OPEN_STR + settings.other.PARENT_MARK_HTML + _elem + regs.MODEL_CLOSE_STR;
+                                                _content = _content.replace(elem, '<span class="' + settings.css.classes.MODEL_NODE + '" style="display:none;">' + _elem + '</span>');
+                                            });
+                                            privates.html = privates.html.replace(content, _content);
+                                            if (elems.length > 0) {
+                                                privates.flags.has_model = true;
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        },
+                        conditions  : {
+                            find    : function () {
+                                var conditions  = privates.html.match(settings.regs.CONDITIONS),
+                                    names       = [],
+                                    html        = privates.html,
+                                    attrs       = null,
+                                    con_strict  = null;
+                                if (conditions instanceof Array) {
+                                    privates.map.conditions = {};
+                                    conditions = conditions.map(function (condition) {
+                                        var value   = condition.replace(settings.regs.COMMENT_BORDERS, ''),
+                                            name    = value.split('=')[0];
+                                        if (names.indexOf(name) === -1) { names.push(name); }
+                                        privates.map.conditions[value] = privates.map.conditions[value] === void 0 ? 1 : privates.map.conditions[value] + 1;
+                                        return {
+                                            value       : value,
+                                            name        : name,
+                                            content     : '',
+                                            corrected   : ''
+                                        };
+                                    });
+                                    conditions.forEach(function (condition) {
+                                        var content = html.match(
+                                                new RegExp(settings.regs.CONDITION_CONTENT.
+                                                    replace('[open]', condition.value).
+                                                    replace('[close]', condition.name), 'gi')
+                                            );
+                                        if (content instanceof Array) {
+                                            condition.content   = content;
+                                            condition.corrected = content;
+                                            content.forEach(function (content, index) {
+                                                var tags = content.match(settings.regs.OPEN_TAG);
+                                                if (tags instanceof Array) {
+                                                    tags = (function (tags) {
+                                                        var history = {};
+                                                        return tags.filter(function (tag) {
+                                                            if (history[tag] === void 0) {
+                                                                history[tag] = true;
+                                                                return true;
+                                                            } else {
+                                                                return false;
+                                                            }
+                                                        });
+                                                    }(tags));
+                                                    tags.forEach(function (tag) {
+                                                        condition.corrected[index] = condition.corrected[index].replace(new RegExp(tag, 'gi'), tag + ' ' + settings.css.attrs.CONDITION + '="' + settings.other.PARENT_MARK_HTML + condition.value + '"');
+                                                    });
+                                                    html = html.replace(content, condition.corrected[index]);
+                                                }
+                                            });
+                                        }
+                                    });
+                                    attrs = html.match(new RegExp(settings.css.attrs.CONDITION + '=' + settings.regs.STRING_CON_STR, 'gi'));
+                                    if (attrs instanceof Array) {
+                                        con_strict = new RegExp(settings.css.attrs.CONDITION + '=' + settings.regs.STRING_CON_STRICT, 'gi');
+                                        attrs.forEach(function (attr) {
+                                            var valid   = attr.match(con_strict),
+                                                _attr   = valid.join(' '),
+                                                values  = _attr.match(settings.regs.STRING_CON),
+                                                value   = '';
+                                            if (values instanceof Array && values.length > 1) {
+                                                values.reverse().forEach(function (val, index) {
+                                                    value += val.replace(settings.regs.STRING_BORDER_CON, '') + (index < values.length - 1 ? ',' : '');
+                                                });
+                                                html = html.replace(_attr, settings.css.attrs.CONDITION + '="' + value + '"');
+                                            }
+                                        });
+                                    }
+                                    conditions.forEach(function (condition) {
+                                        var reg = new RegExp('<\\!--' + condition.name, 'gi');
+                                        html = html.replace(reg, '<!--' + settings.other.PARENT_MARK_HTML + condition.name);
+                                    });
+                                    if (conditions.length > 0) {
+                                        privates.flags.has_conditions = true;
+                                    }
+                                    /*
+                                    html = html.replace(settings.regs.CONDITIONS, '');
+                                    names.forEach(function (name) {
+                                        html = html.replace(new RegExp(settings.regs.CON_CLOSE_STR.replace('[name]', name), 'gi'), '');
+                                    });
+                                    */
+                                    privates.html = html;
+                                }
+                            },
+                        },
+                        events      : {
+                            find: function () {
+                                var tags = processing.tags.get(),
+                                    regs = settings.regs,
+                                    all  = [];
+                                tags.forEach(function (tag, index) {
+                                    var attrs   = tag.mod.match(regs.EVENT_ATTR),
+                                        events  = [];
+                                    if (attrs instanceof Array) {
+                                        attrs.forEach(function (attr) {
+                                            var content = attr.replace(regs.EVENT_BORDERS, '').replace(/["']/gi, '').split('=');
+                                            content.length === 2 && events.push({
+                                                event   : content[0].replace(/^on/i, ''),
+                                                handle  : content[1],
+                                                id      : flex.unique(),
+                                                attr    : attr
+                                            });
+                                        });
+                                        (function () {
+                                            var history = [];
+                                            events = events.filter(function (val) {
+                                                if (history.indexOf(val.event) === -1) {
+                                                    history.push(val.event);
+                                                    return true;
+                                                } else {
+                                                    return false;
+                                                }
+                                            });
+                                        }());
+                                        events.forEach(function (event) {
+                                            tag.mod = tag.mod.replace(event.attr, regs.DOM_OPEN_STR + event.id + regs.DOM_CLOSE_STR);
+                                        });
+                                        privates.html   = privates.html.replace(tag.org, tag.mod);
+                                        tag.org         = tag.mod;
+                                        all             = all.concat(events);
+                                    }
+                                });
+                                privates.map.events = all;
+                            }
+                        },
+                        procced : function (){
+                            processing.fix();
+                            processing.hooks.find();
+                            processing.events.find();
+                            processing.map.model();
+                            processing.map.dom();
+                            processing.conditions.find();
+                            processing.model.inNodes();
+                            processing.model.inAttrs();
+                            processing.dom.find();
+                            processing.tags.accept();
+                        },
+                    };
+                    html        = {
+                        get             : function (parent) {
+                            var _html       = privates.html,
+                                parent      = typeof parent === 'string' ? parent : false,
+                                no_parent   = '__no_parent__';
+                            if (parent !== false) {
+                                if (privates.cache.html[parent] === void 0) {
+                                    _html                       = _html.replace(new RegExp(settings.other.PARENT_MARK_HTML, 'gi'), parent + '.');
+                                    privates.cache.html[parent] = _html;
+                                } else {
+                                    _html = privates.cache.html[parent];
+                                }
+                            } else {
+                                if (privates.cache.html[no_parent] === void 0) {
+                                    _html = _html.replace(new RegExp(settings.other.PARENT_MARK_HTML, 'gi'), '');
+                                    privates.cache.html[no_parent] = _html;
+                                } else {
+                                    _html = privates.cache.html[no_parent];
+                                }
+                            }
+                            return _html;
+                        }
                     };
                     signature   = function () {
                         return logs.SIGNATURE + ':: pattern (' + self.url + ')';
                     };
                     returning   = {
-                        load : load,
-                        html : get.html,
+                        load    : load,
+                        html    : html.get,
+                        map     : function () { return privates.map;},
+                        flags   : function () { return privates.flags;},
                     };
                     return {
-                        load: returning.load,
-                        html: returning.html
+                        load    : returning.load,
+                        html    : returning.html,
+                        map     : returning.map,
+                        binding : {
+                            model : processing.binding.model
+                        },
+                        flags   : returning.flags
                     };
                 },
                 instance    : function (parameters) {
@@ -513,8 +1043,26 @@
                                 html    : parameters.html,
                                 css     : parameters.css,
                                 js      : parameters.js,
+                                map     : {
+                                    model       : null,
+                                    dom         : null,
+                                    conditions  : null,
+                                    events      : null,
+                                    component   : null
+                                },
+                                binding : {
+                                    model   : null
+                                },
+                                cache   : {
+                                    html    : {},
+                                    regs    : {}
+                                },
+                                flags   : {
+                                    has_model       : false,
+                                    has_conditions  : false
+                                }
                             },
-                            prototype       : source.proto
+                            prototype       : Source.proto
                         }).createInstanceClass();
                     } else {
                         return null;
@@ -546,17 +1094,16 @@
                         }
                     });
                     urls.forEach(function (url) {
-                        var instance = source.storage.get(url);
+                        var instance = Source.storage.get(url);
                         if (instance !== null) {
                             sources.push(instance);
                             flex.overhead.register.done(register_id, url);
                         } else {
-                            instance = source.instance({ url: url });
+                            instance = Source.instance({ url: url });
                             instance.load(
                                 function (_url, _original_url, _instance) {
                                     sources.push                (_instance);
-                                    source.storage.add          (_original_url, _instance);
-                                    pattern.init                (_url, _instance.html());
+                                    Source.storage.add          (_original_url, _instance);
                                     flex.overhead.register.done (register_id, _original_url);
                                 },
                                 function (_url, _original_url, _instance) {
@@ -569,1587 +1116,1768 @@
                 }
             };
             //END: source class ===============================================
-            //BEGIN: pattern class ===============================================
-            pattern     = {
-                proto       : function (privates) {
-                    var self            = this,
-                        hooks           = null,
-                        convert         = null,
-                        compatibility   = null,
-                        clone           = null,
-                        returning       = null,
-                        signature       = null;
-                    convert         = {
-                        hooks       : {
-                            getFromHTML : function(){
-                                var hooks = privates.html.match(settings.regs.HOOK);
-                                if (hooks instanceof Array) {
-                                    hooks = (function (hooks) {
-                                        var history = {};
-                                        return hooks.filter(function (hook) {
-                                            if (history[hook] === void 0) {
-                                                history[hook] = true;
-                                                return true;
-                                            } else {
-                                                return false;
-                                            }
-                                        });
-                                    }(hooks));
-                                    hooks = hooks.map(function (hook) {
-                                        return hook .replace(new RegExp(settings.regs.HOOK_OPEN,    'gi'), '')
-                                                    .replace(new RegExp(settings.regs.HOOK_CLOSE,   'gi'), '');
-                                    });
-                                    return hooks;
-                                }
-                                return [];
-                            },
-                            wrap        : function (target_node) {
-                                function wrapHook(node) {
-                                    var innerHTML   = node.nodeValue,
-                                        hooks       = innerHTML.match(settings.regs.HOOK),
-                                        container   = null,
-                                        tag         = settings.compatibility.PARENT_TO_CHILD[node.parentNode.nodeName.toLowerCase()] !== void 0 ? settings.compatibility.PARENT_TO_CHILD[node.parentNode.nodeName.toLowerCase()] : settings.compatibility.BASE;
-                                    if (hooks instanceof Array) {
-                                        hooks.forEach(function (hook) {
-                                            var _hook = hook.replace(settings.regs.HOOK_BORDERS, '');
-                                            innerHTML = innerHTML.replace(  new RegExp(settings.regs.HOOK_OPEN + _hook + settings.regs.HOOK_CLOSE, 'gi'),
-                                                                            '<' + tag + ' id="' + _hook + '" class="' + settings.css.classes.HOOK_WRAPPER + '"><!--' + hook + '--></' + tag + '>');
-                                        });
-                                        container           = document.createElement(node.parentNode.nodeName);
-                                        container.innerHTML = innerHTML;
-                                        for (var index = 0, max_index = container.childNodes.length; index < max_index; index += 1) {
-                                            node.parentNode.insertBefore(container.childNodes[0], node);
-                                        }
-                                        node.parentNode.removeChild(node);
-                                    }
-                                };
-                                if (target_node.childNodes !== void 0) {
-                                    if (target_node.childNodes.length > 0) {
-                                        Array.prototype.forEach.call(
-                                            Array.prototype.filter.call(target_node.childNodes, function () { return true; }),
-                                            function (childNode) {
-                                                if (typeof childNode.innerHTML === 'string') {
-                                                    if (helpers.testReg(settings.regs.HOOK, childNode.innerHTML)) {
-                                                        convert.hooks.wrap(childNode);
-                                                    }
-                                                } else if (typeof childNode.nodeValue === 'string') {
-                                                    if (helpers.testReg(settings.regs.HOOK, childNode.nodeValue)) {
-                                                        wrapHook(childNode);
-                                                    }
-                                                }
-                                            }
-                                        );
-                                    }
-                                }
-                                return true;
-                            },
-                            setters     : {
-                                inNodes     : function (node, hook, storage, hook_com) {
-                                    var hook_com    = hook_com  instanceof RegExp ? hook_com    : new RegExp(settings.regs.HOOK_OPEN_COM    + hook + settings.regs.HOOK_CLOSE_COM,  'gi'),
-                                        hook        = hook      instanceof RegExp ? hook        : new RegExp(settings.regs.HOOK_OPEN        + hook + settings.regs.HOOK_CLOSE,      'gi');
-                                    if (node.childNodes !== void 0) {
-                                        if (node.childNodes.length > 0) {
-                                            Array.prototype.forEach.call(node.childNodes, function (childNode) {
-                                                if (typeof childNode.innerHTML === 'string') {
-                                                    if (helpers.testReg(hook_com, childNode.innerHTML)) {
-                                                        convert.hooks.setters.inNodes(childNode, hook, storage, hook_com);
-                                                    }
-                                                } else if (typeof childNode.nodeValue === 'string') {
-                                                    if (helpers.testReg(hook, childNode.nodeValue)) {
-                                                        storage.push(convert.hooks.setters.nodeSetter(childNode.parentNode));
-                                                    }
-                                                }
-                                            });
-                                        }
-                                    }
-                                },
-                                inAttributes: function (node, hook, storage, reg_hook) {
-                                    var reg_hook = reg_hook instanceof RegExp ? reg_hook : new RegExp(settings.regs.HOOK_OPEN + hook + settings.regs.HOOK_CLOSE, 'gi');
-                                    if (node.attributes) {
-                                        Array.prototype.forEach.call(node.attributes, function (attr) {
-                                            if (typeof attr.value === 'string' && attr.value !== '') {
-                                                if (helpers.testReg(reg_hook, attr.value)) {
-                                                    node.setAttribute(attr.nodeName, attr.value.replace(reg_hook, '{{' + hook + '_attr' + '}}'));
-                                                    storage.push(convert.hooks.setters.attrSetter(
-                                                        new RegExp(settings.regs.HOOK_OPEN + hook + '_attr' + settings.regs.HOOK_CLOSE, 'gi'),
-                                                        node,
-                                                        attr.nodeName,
-                                                        node.getAttribute(attr.nodeName))
-                                                    );
-                                                }
-                                            }
-                                        });
-                                    }
-                                    if (node.childNodes) {
-                                        Array.prototype.forEach.call(node.childNodes, function (childNode) {
-                                            convert.hooks.setters.inAttributes(childNode, hook, storage, reg_hook);
-                                        });
-                                    }
-                                },
-                                attrSetter  : function (hook, node, attr_name, attr_value) {
-                                    return function (value) {
-                                        node.setAttribute(attr_name, attr_value.replace(hook, value));
-                                    };
-                                },
-                                nodeSetter  : function (node) {
-                                    function verifyCompatibility(node, value) {
-                                        var _node   = null,
-                                            tag     = null;
-                                        if (node.innerHTML !== value) {
-                                            tag = compatibility.getFirstTagFromHTML(value.replace(settings.regs.BODY_CLEAR, ''));
-                                            if (settings.compatibility.CHILD_TO_PARENT[tag] !== void 0) {
-                                                if (settings.compatibility.CHILD_TO_PARENT[tag] !== node.nodeName.toLowerCase()) {
-                                                    _node = document.createElement(settings.compatibility.CHILD_TO_PARENT[tag]);
-                                                    if (node.attributes !== void 0 && node.attributes !== null && node.attributes.length !== void 0) {
-                                                        Array.prototype.forEach.call(node.attributes, function (attr) {
-                                                            _node.setAttribute(attr.nodeName, attr.value);
-                                                        });
-                                                    }
-                                                    _node.innerHTML = value;
-                                                    node.parentNode.insertBefore(_node, node)
-                                                    node.parentNode.removeChild(node);
-                                                    node = _node;
-                                                }
-                                            }
-                                        }
-                                        return node;
-                                    };
-                                    return function (value) {
-                                        if (typeof value.innerHTML === 'string') {
-                                            node.parentNode.insertBefore(value, node);
-                                            node.parentNode.removeChild(node);
-                                            return true;
-                                        }
-                                        if (value instanceof settings.classes.RESULT) {
-                                            value.nodes().forEach(function (_node) {
-                                                node.parentNode.insertBefore(_node, node);
-                                            });
-                                            node.parentNode.removeChild(node);
-                                            return true;
-                                        }
-                                        if (value.toString !== void 0 || typeof value === 'string') {
-                                            node.innerHTML  = typeof value === 'string' ? value : value.toString();
-                                            node            = verifyCompatibility(node, value);
-                                            for (var index = node.childNodes.length - 1; index >= 0; index -= 1) {
-                                                node.parentNode.insertBefore(node.childNodes[0], node);
-                                            }
-                                            node.parentNode.removeChild(node);
-                                            return true;
-                                        }
-                                    };
-                                },
-                            },
-                            process     : function () {
-                                privates.hooks_html = convert.hooks.getFromHTML();
-                                convert.hooks.wrap(privates.pattern);
-                            },
-                        },
-                        model       : {
-                            getFromHTML : function () {
-                                var models = privates.html.match(settings.regs.MODEL);
-                                if (models instanceof Array) {
-                                    models = (function (models) {
-                                        var history = {};
-                                        return models.filter(function (model) {
-                                            if (history[model] === void 0) {
-                                                history[model] = true;
-                                                return true;
-                                            } else {
-                                                return false;
-                                            }
-                                        });
-                                    }(models));
-                                    models = models.map(function (model) {
-                                        return model.replace(settings.regs.MODEL_BORDERS, '');
-                                    });
-                                    return models;
-                                }
-                                return null;
-                            },
-                            setAttrData : function(node, model_item){
-                                var model = node.getAttribute(settings.css.attrs.MODEL_DATA);
-                                model = typeof model === 'string' ? (model !== '' ? JSON.parse(model) : []) : [];
-                                model.push(model_item);
-                                node.setAttribute(settings.css.attrs.MODEL_DATA, JSON.stringify(model));
-                            },
-                            find        : {
-                                inStyles: function (node, style){
-                                    var properties = style.split(';');
-                                    properties.forEach(function (property) {
-                                        var pair    = property.split(':'),
-                                            model   = property.match(settings.regs.MODEL);
-                                        if (pair.length > 1) {
-                                            if (node.style[pair[0]] !== void 0) {
-                                                model = property.match(settings.regs.MODEL);
-                                                if (model instanceof Array && model.length === 1) {
-                                                    model = model[0].replace(settings.regs.MODEL_BORDERS, '');
-                                                    convert.model.setAttrData(node, {
-                                                        style: pair[0],
-                                                        model: model
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    });
-                                },
-                                inAttrs : function (node, model, reg_model) {
-                                    var reg_model = reg_model instanceof RegExp ? reg_model : new RegExp(settings.regs.MODEL_OPEN + model + settings.regs.MODEL_CLOSE, 'gi');
-                                    if (node.attributes) {
-                                        Array.prototype.forEach.call(node.attributes, function (attr) {
-                                            var defaultIEFix = null;
-                                            if (typeof attr.value === 'string' && attr.value !== '') {
-                                                if (helpers.testReg(reg_model, attr.value)) {
-                                                    if (attr.nodeName === 'style') {
-                                                        convert.model.find.inStyles(node, attr.value);
-                                                    } else {
-                                                        convert.model.setAttrData(node, {
-                                                            attr    : attr.nodeName,
-                                                            model   : model
-                                                        });
-                                                    }
-                                                    node.removeAttribute(attr.nodeName);
-                                                    if (node[attr.nodeName] !== void 0) {
-                                                        try{
-                                                            node[attr.nodeName] = null;
-                                                        } catch (e) { }
-                                                        //IE 11 fix
-                                                        defaultIEFix = 'default' + attr.nodeName[0].toUpperCase() + attr.nodeName.substr(1, attr.nodeName.length - 1);
-                                                        if (node[defaultIEFix] !== void 0) {
-                                                            try {
-                                                                node[defaultIEFix] = '';
-                                                            } catch (e) { }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        });
-                                    }
-                                    if (node.childNodes) {
-                                        Array.prototype.forEach.call(node.childNodes, function (childNode) {
-                                            convert.model.find.inAttrs(childNode, model, reg_model);
-                                        });
-                                    }
-                                },
-                                inHTML  : function (node, model, reg_model) {
-                                    function validatePlaceHolder(node, model) {
-                                        if (node.childNodes !== null && node.childNodes.length > 0) {
-                                            Array.prototype.forEach.call(node.childNodes, function (child) {
-                                                if (child.nodeType !== 3) {
-                                                    if (child.className !== void 0 && child.className.indexOf(settings.css.classes.HOOK_WRAPPER) === -1) {
-                                                        flex.logs.log(signature() + logs.pattern.MODEL_HOOK_NEEDS_WRAPPER + '(model hook: ' + model + ')', flex.logs.types.CRITICAL);
-                                                        throw logs.pattern.MODEL_HOOK_NEEDS_WRAPPER;
-                                                    } else if (child.className === void 0) {
-                                                        flex.logs.log(signature() + logs.pattern.MODEL_HOOK_NEEDS_WRAPPER + '(model hook: ' + model + ')', flex.logs.types.CRITICAL);
-                                                        throw logs.pattern.MODEL_HOOK_NEEDS_WRAPPER;
-                                                    }
-                                                }
-                                            });
-                                        }
-                                    };
-                                    var reg_model = reg_model instanceof RegExp ? reg_model : new RegExp(settings.regs.MODEL_OPEN + model + settings.regs.MODEL_CLOSE, 'gi');
-                                    if (node.childNodes !== void 0) {
-                                        if (node.childNodes.length > 0) {
-                                            Array.prototype.forEach.call(node.childNodes, function (childNode) {
-                                                if (typeof childNode.innerHTML === 'string') {
-                                                    if (helpers.testReg(reg_model, childNode.innerHTML)) {
-                                                        convert.model.find.inHTML(childNode, model, reg_model);
-                                                    }
-                                                } else if (typeof childNode.nodeValue === 'string') {
-                                                    if (helpers.testReg(reg_model, childNode.nodeValue)) {
-                                                        validatePlaceHolder(node, model);
-                                                        childNode.nodeValue = flex.unique();
-                                                        convert.model.setAttrData(node, {
-                                                            model   : model,
-                                                            text    : childNode.nodeValue
-                                                        });
-                                                    }
-                                                }
-                                            });
-                                        }
-                                    }
-                                }
-                            },
-                            process     : function () {
-                                var models_html = convert.model.getFromHTML();
-                                if (models_html !== null) {
-                                    models_html.forEach(function (model) {
-                                        convert.model.find.inAttrs(privates.pattern, model);
-                                        convert.model.find.inHTML(privates.pattern, model, null);
-                                    });
-                                }
-                            }
-                        },
-                        conditions  : {
-                            getName : function (str){
-                                var condition = str.split('=');
-                                if (condition.length === 2) {
-                                    return {
-                                        name    : condition[0],
-                                        value   : condition[1]
-                                    };
-                                }
-                                flex.logs.log(signature() + logs.pattern.WRONG_CONDITION_DEFINITION + ' (original comment: ' + str + ')', flex.logs.types.CRITICAL);
-                                throw logs.pattern.WRONG_CONDITION_DEFINITION;
-                            },
-                            getNodes: function (condition_name, condition_node, parent) {
-                                var inside_condition    = false,
-                                    nodes               = [],
-                                    included            = [],
-                                    inside_included     = false;
-                                try {
-                                    Array.prototype.forEach.call(parent.childNodes, function (child) {
-                                        var con_included = null;
-                                        if (inside_condition) {
-                                            if (child.nodeType === 8 && child.nodeValue === condition_name) {
-                                                inside_condition = null;
-                                                throw 'closed';
-                                            } else {
-                                                if (child.nodeType === 8 && helpers.testReg(settings.regs.CONDITION_STRUCTURE, child.nodeValue)) {
-                                                    con_included = convert.conditions.getName(child.nodeValue).name;
-                                                    if (included.indexOf(con_included) === -1) {
-                                                        included.push(con_included);
-                                                    }
-                                                    inside_included = true;
-                                                } else if (child.nodeType === 8 && included.indexOf(child.nodeValue) !== -1) {
-                                                    inside_included = false;
-                                                } else /*if (inside_included === false) */{
-                                                    nodes.push(child);
-                                                }
-                                            }
-                                        } else if (child === condition_node) {
-                                            inside_condition = true;
-                                        }
-                                    });
-                                } catch (e) {
-                                    if (e !== 'closed') {
-                                        flex.logs.log(signature() + logs.pattern.UNEXCEPTED_ERROR_CONDITION_PARSER + ' (condition name: ' + condition_name + ')', flex.logs.types.CRITICAL);
-                                        throw logs.pattern.UNEXCEPTED_ERROR_CONDITION_PARSER;
-                                    }
-                                }
-                                if (inside_condition === false) {
-                                    flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_BEGINING + ' (condition name: ' + condition_name + ')', flex.logs.types.CRITICAL);
-                                    throw logs.pattern.CANNOT_FIND_CONDITION_BEGINING;
-                                }
-                                if (inside_condition === true) {
-                                    flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_END + ' (condition name: ' + condition_name + ')', flex.logs.types.CRITICAL);
-                                    throw logs.pattern.CANNOT_FIND_CONDITION_END;
-                                }
-                                return {
-                                    nodes       : nodes,
-                                    included    : included
-                                };
-                            },
-                            find    : function (node){
-                                function search(node, conditions) {
-                                    if (node.childNodes !== void 0) {
-                                        Array.prototype.forEach.call(node.childNodes, function (node) {
-                                            var condition   = null,
-                                                found       = null;
-                                            if (node.nodeType === 8) {
-                                                if (helpers.testReg(settings.regs.CONDITION_STRUCTURE, node.nodeValue)) {
-                                                    condition = convert.conditions.getName(node.nodeValue);
-                                                    if (conditions[condition.name] === void 0) {
-                                                        conditions[condition.name] = [];
-                                                    }
-                                                    found = convert.conditions.getNodes(condition.name, node, node.parentNode);
-                                                    conditions[condition.name].push({
-                                                        value       : condition.value,
-                                                        comment     : node,
-                                                        nodes       : found.nodes,
-                                                        included    : found.included
-                                                    });
-                                                }
-                                            } else if (node.childNodes !== void 0 && node.childNodes.length > 0) {
-                                                search(node, conditions);
-                                            }
-                                        });
-                                    }
-                                };
-                                function setupAppendMethod(conditions) {
-                                    function add(comment) {
-                                        if (_comments.indexOf(comment) === -1) {
-                                            _comments.push(comment);
-                                        }
-                                    };
-                                    function getAppend(node) {
-                                        var placeholder = document.createTextNode('');
-                                        node.parentNode.insertBefore(placeholder, node);
-                                        return function (_node) {
-                                            placeholder.parentNode.insertBefore(_node, placeholder);
-                                        };
-                                    };
-                                    var _comments = [];
-                                    _object(conditions).forEach(function (con_name, con_value) {
-                                        if (con_value instanceof Array) {
-                                            con_value.forEach(function (value, index) {
-                                                conditions[con_name][index].append = getAppend(value.comment);
-                                            });
-                                        }
-                                    });
-                                    return _comments;
-                                };
-                                function removeComments(conditions, comments) {
-                                    _object(conditions).forEach(function (con_name, con_value) {
-                                        if (con_value instanceof Array) {
-                                            con_value.forEach(function (value, index) {
-                                                value.nodes.forEach(function (node) {
-                                                    value.append(node);
-                                                });
-                                                conditions[con_name][index].comment = null;
-                                                delete conditions[con_name][index].comment;
-                                            });
-                                        }
-                                    });
-                                    comments.forEach(function (comment) {
-                                        if (comment.parentNode !== null) {
-                                            comment.parentNode.removeChild(comment);
-                                        }
-                                    });
-                                };
-                                var conditions  = {},
-                                    _comments   = null;
-                                search(node, conditions);
-                                _comments = setupAppendMethod(conditions);
-                                removeComments(conditions, _comments);
-                                return conditions;
-                            },
-                            process : function (clone, _conditions) {
-                                var conditions      = convert.conditions.find(clone),
-                                    conditions_dom  = {};
-                                _object(_conditions).forEach(function (con_name, con_value) {
-                                    var found_flag  = false;
-                                    if (conditions[con_name] !== void 0) {
-                                        conditions_dom[con_name] = {};
-                                        conditions[con_name].forEach(function (condition) {
-                                            conditions_dom[con_name][condition.value] = conditions_dom[con_name][condition.value] === void 0 ? [] : conditions_dom[con_name][condition.value];
-                                            conditions_dom[con_name][condition.value] = (function (_append, _nodes, _included) {
-                                                var methods = {
-                                                    append      : function append() {
-                                                        var to_delete = [];
-                                                        _nodes.forEach(function (node, index) {
-                                                            if (node.__to_deleted === void 0) {
-                                                                _append(node);
-                                                            } else {
-                                                                to_delete.push(index);
-                                                            }
-                                                        });
-                                                        if (to_delete.length > 0) {
-                                                            _nodes = _nodes.filter(function (val, index) {
-                                                                return to_delete.indexOf(index) !== -1 ? false : true;
-                                                            });
-                                                        }
-                                                    },
-                                                    remove      : function remove() {
-                                                        var to_delete = [];
-                                                        _nodes.forEach(function (node, index) {
-                                                            if (node.parentNode !== null) {
-                                                                return node.parentNode.removeChild(node);
-                                                            }
-                                                            if (node.__to_deleted !== void 0) {
-                                                                to_delete.push(index);
-                                                            }
-                                                        });
-                                                        if (to_delete.length > 0) {
-                                                            _nodes = _nodes.filter(function (val, index) {
-                                                                return to_delete.indexOf(index) !== -1 ? false : true;
-                                                            });
-                                                        }
-                                                    },
-                                                    del         : function del() {
-                                                        _nodes.forEach(function (node) {
-                                                            node.__to_deleted = true;
-                                                        });
-                                                    },
-                                                    included    : _included
-                                                };
-                                                methods.append.blocked = false;
-                                                methods.remove.blocked = false;
-                                                return methods;
-                                            }(condition.append, condition.nodes, condition.included));
-                                            condition.nodes.forEach(function (node) {
-                                                if (condition.value !== con_value) {
-                                                    if (node.parentNode !== null) {
-                                                        node.parentNode.removeChild(node);
-                                                    }
-                                                } else {
-                                                    found_flag = true;
-                                                }
-                                            });
-                                        });
-                                        conditions_dom[con_name].__update   = (function (values) {
-                                            return function update(res) {
-                                                _object(values).forEach(function (name, methods) {
-                                                    if (methods.append !== void 0 && methods.remove !== void 0) {
-                                                        if (!methods.append.blocked && !methods.remove.blocked) {
-                                                            if (res === name) {
-                                                                methods.append();
-                                                            } else {
-                                                                methods.remove();
-                                                            }
-                                                        }
-                                                    }
-                                                });
-                                            };
-                                        }(conditions_dom[con_name]));
-                                        conditions_dom[con_name].__block    = (function (values) {
-                                            return function block(res) {
-                                                _object(values).forEach(function (name, methods) {
-                                                    if (methods.append !== void 0 && methods.remove !== void 0) {
-                                                        methods.append.blocked = true;
-                                                        methods.remove.blocked = true;
-                                                    }
-                                                });
-                                            };
-                                        }(conditions_dom[con_name]));
-                                        conditions_dom[con_name].__unblock  = (function (values) {
-                                            return function unblock(res) {
-                                                _object(values).forEach(function (name, methods) {
-                                                    if (methods.append !== void 0 && methods.remove !== void 0) {
-                                                        methods.append.blocked = false;
-                                                        methods.remove.blocked = false;
-                                                    }
-                                                });
-                                            };
-                                        }(conditions_dom[con_name]));
-                                        conditions_dom[con_name].__included = (function (values) {
-                                            var included = [];
-                                            _object(values).forEach(function (name, methods) {
-                                                if (methods.included !== void 0) {
-                                                    included = included.concat(methods.included);
-                                                }
-                                            });
-                                            return included;
-                                        }(conditions_dom[con_name]));
-                                        if (!found_flag) {
-                                            flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_VALUE + ' (condition name: ' + con_name + ' = "' + con_value + '")', flex.logs.types.NOTIFICATION);
-                                        }
-                                    } else {
-                                        flex.logs.log(signature() + logs.pattern.CANNOT_FIND_CONDITION_NODES + ' (condition name: ' + con_name + ')', flex.logs.types.WARNING);
-                                    }
-                                });
-                                return Object.keys(conditions_dom).length > 0 ? conditions_dom : null;
-                            }
-                        },
-                        marks       : {
-                            getFromHTML : function (type) {
-                                var marks   = null,
-                                    _marks  = [];
-                                if (settings.regs[type] !== void 0) {
-                                    marks = privates.html.match(settings.regs[type]);
-                                    if (marks instanceof Array) {
-                                        marks = (function (marks) {
-                                            var history = {};
-                                            return marks.filter(function (mark) {
-                                                if (history[mark] === void 0) {
-                                                    history[mark] = true;
-                                                    return true;
-                                                } else {
-                                                    return false;
-                                                }
-                                            });
-                                        }(marks));
-                                        marks.forEach(function (mark, index) {
-                                            var _mark = mark.replace(new RegExp(settings.regs[type + '_OPEN'], 'gi'), '')
-                                                                    .replace(new RegExp(settings.regs[type + '_CLOSE'], 'gi'), '');
-                                            privates.html = privates.html.replace(
-                                                new RegExp(settings.regs[type + '_OPEN'] + _mark.replace(/\./gi, '\\.') + settings.regs[type + '_CLOSE'], 'gi'),
-                                                ' ' + settings.css.attrs[type + '_MARK'] + '="' + _mark + '" ');
-                                            _mark = _mark.split(',');
-                                            _mark.forEach(function (mark) {
-                                                mark = mark.replace(/\s/gi);
-                                                if (_marks.indexOf(mark) === -1) {
-                                                    _marks.push(mark);
-                                                }
-                                            });
-                                        });
-                                    }
-                                }
-                                return _marks;
-                            },
-                            getFromDOM  : function (clone, type) {
-                                var marks = {};
-                                if (privates[type.toLowerCase()] instanceof Array) {
-                                    privates[type.toLowerCase()].forEach(function (mark) {
-                                        marks[mark] = _nodes('*[' + settings.css.attrs[type + '_MARK'] + '*="' + mark + '"]', false, clone);
-                                        if (marks[mark].target !== null && marks[mark].target.length > 0) {
-                                            marks[mark] = marks[mark].target;
-                                        }
-                                    });
-                                    _object(marks).forEach(function (name, nodes) {
-                                        if (marks[name] !== null) {
-                                            switch (type) {
-                                                case settings.marks.DOM:
-                                                    marks[name] = nodes;
-                                                    break;
-                                            }
-                                            Array.prototype.forEach.call(nodes, function (node, number) {
-                                                node.removeAttribute(settings.css.attrs[type + '_MARK']);
-                                            });
-                                        }
-                                    });
-                                }
-                                return marks;
-                            },
-                            process     : function () {
-                                [settings.marks.DOM].forEach(function (type) {
-                                    privates[type.toLowerCase()] = convert.marks.getFromHTML(type);
-                                });
-                            }
-                        },
-                        process     : function () {
-                            privates.pattern = compatibility.getParent(compatibility.getFirstTagFromHTML(privates.html));
-                            if (privates.pattern !== null) {
-                                convert.marks.      process();
-                                privates.pattern.innerHTML = privates.html;
-                                convert.hooks.      process();
-                                convert.model.      process();
-                                return true;
-                            } else {
-                                flex.logs.log(signature() + logs.pattern.CANNOT_CREATE_WRAPPER, flex.logs.types.CRITICAL);
-                                throw logs.pattern.CANNOT_CREATE_WRAPPER;
-                            }
-                            return false;
-                        }
-                    };
-                    compatibility   = {
-                        getParent           : function (child_tag) {
-                            if (typeof child_tag === 'string') {
-                                if (settings.compatibility.CHILD_TO_PARENT[child_tag] !== void 0) {
-                                    return document.createElement(settings.compatibility.CHILD_TO_PARENT[child_tag]);
-                                } else {
-                                    return document.createElement(settings.compatibility.BASE);
-                                }
-                            } else {
-                                return null;
-                            }
-                        },
-                        getFirstTagFromHTML : function (html) {
-                            var tag = html.match(settings.regs.FIRST_TAG);
-                            if (tag !== null) {
-                                if (tag.length === 1) {
-                                    return tag[0].replace(settings.regs.TAG_BORDERS, '').match(settings.regs.FIRST_WORD)[0].toLowerCase()
-                                }
-                            }
-                            flex.logs.log(signature() + logs.pattern.CANNOT_FIND_FIRST_TAG + '(Probably hook has symbol of caret inside (\\n, \\r))', flex.logs.types.NOTIFICATION);
-                            return null;
-                        }
-                    };
-                    clone           = function (condition_values) {
-                        var hook_setters    = {},
-                            clone           = privates.pattern.cloneNode(true),
-                            conditions      = null;
-                        privates.hooks_html.forEach(function (hook) {
-                            var _hooks = [];
-                            convert.hooks.setters.inAttributes  (clone, hook, _hooks);
-                            convert.hooks.setters.inNodes       (clone, hook, _hooks);
-                            hook_setters[hook] = (function (_hooks) {
-                                return function (value) {
-                                    _hooks.forEach(function (_hook) {
-                                        _hook(value);
-                                    });
-                                };
-                            }(_hooks));
-                        });
-                        return {
-                            clone           : clone,
-                            setters         : hook_setters,
-                            dom             : convert.marks.getFromDOM(clone, settings.marks.DOM),
-                            applyConditions : function(){
-                                var conditions_dom  = null;
-                                if (condition_values !== void 0 && condition_values !== null) {
-                                    conditions_dom = convert.conditions.process(clone, condition_values);
-                                }
-                                return conditions_dom;
-                            }
-                        };
-                    };
-                    signature       = function () {
-                        return logs.SIGNATURE + ':: pattern (' + self.url + ')';
-                    };
-                    returning       = {
-                        build   : convert.process,
-                        clone   : clone
-                    };
-                    return {
-                        build   : returning.build,
-                        pattern : returning.clone
-                    };
-                },
-                instance    : function (parameters) {
-                    if (flex.oop.objects.validate(parameters, [ { name: 'url',  type: 'string'  },
-                                                                { name: 'html', type: 'string'  }]) !== false) {
-                        return _object({
-                            parent          : settings.classes.PATTERN,
-                            constr          : function () {
-                                this.url    = flex.system.url.restore(parameters.url);
-                            },
-                            privates        : {
-                                html                : parameters.html,
-                                pattern             : null,
-                                hooks_html          : null,
-                                dom                 : null
-                            },
-                            prototype       : pattern.proto
-                        }).createInstanceClass();
-                    } else {
-                        return null;
-                    }
-                },
-                storage     : {
-                    add: function (url, instance) {
-                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PATTERNS, {});
-                        if (storage[url] === void 0) {
-                            storage[url] = instance;
-                        }
-                    },
-                    get: function (url) {
-                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PATTERNS, {});
-                        return storage[url] !== void 0 ? storage[url] : null;
-                    },
-                },
-                init        : function (url, html) {
-                    var _instance = pattern.storage.get(url);
-                    if (_instance !== null) {
-                        return _instance;
-                    } else {
-                        _instance = pattern.instance({ url: url, html: html });
-                        if (_instance.build() !== false) {
-                            instance.init(url, _instance.pattern)
-                            pattern.storage.add(url, _instance);
-                            return _instance;
-                        }
-                    }
-                    return null;
-                }
-            };
-            //END: pattern class ===============================================
-            //BEGIN: instance class ===============================================
-            instance    = {
-                proto   : function(privates){
-                    var self        = this,         
-                        privates    = privates,
-                        map         = null,
-                        hooks       = null,
+            Pattern         = {
+                proto   : function (privates) {
+                    var self        = this,
+                        html        = null,
                         model       = null,
                         dom         = null,
-                        methods     = null,
-                        controller  = null,
-                        cloning     = null,
+                        mapping     = null,
+                        hooks       = null,
                         condition   = null,
-                        returning   = null;
-                    cloning     = {
-                        update          : function (_hooks, conditions) {
-                            var _hooks  = _hooks instanceof Array ? _hooks[0] : _hooks,
-                                map     = {};
-                            _object(_hooks).forEach(function (hook_name, hook_value) {
-                                if (hook_value instanceof settings.classes.RESULT) {
-                                    map['__' + hook_name + '__'] = hook_value.url;
-                                } else {
-                                    map[hook_name] = true;
-                                }
-                                map['__conditions__'] = conditions;
-                            });
-                            return map;
-                        },
-                        convertHooks    : function(hooks_map, hooks){
-                            var _hooks  = [],
-                                hooks   = hooks instanceof Array ? hooks : [hooks];
-                            hooks.forEach(function (_item) {
-                                var item = {};
-                                _object(_item).forEach(function (hook_name, hook_value) {
-                                    if (hooks_map[hook_name] !== void 0) {
-                                        if (typeof hooks_map[hook_name] === 'boolean' && hooks_map[hook_name] === true) {
-                                            item[hook_name] = hook_value;
-                                        } else if (typeof hooks_map[hook_name] === 'object' && hooks_map['__' + hook_name + '__'] !== void 0 && typeof hook_value === 'object' && hook_value !== null) {
-                                            item[hook_name] = caller.instance({
-                                                url         : hooks_map['__' + hook_name + '__'],
-                                                conditions  : hooks_map[hook_name]['__conditions__'],
-                                                hooks       : cloning.convertHooks(hooks_map[hook_name], hook_value)
-                                            });
-                                        } else {
-                                            flex.logs.log(logs.instance.NO_URL_FOR_CLONE_HOOK + '(' + self.url + ')', flex.logs.types.WARNING);
-                                        }
-                                    } else {
-                                        flex.logs.log(logs.instance.BAD_HOOK_FOR_CLONE + '(' + self.url + ')', flex.logs.types.CRITICAL);
-                                        throw logs.instance.BAD_HOOK_FOR_CLONE;
-                                    }
-                                });
-                                _hooks.push(item);
-                            });
-                            return _hooks;
-                        },
-                        clone           : function (hooks_map, hooks) {
-                            var _hooks = cloning.convertHooks(hooks_map, hooks),
-                                result = null;
-                            if (_hooks.length > 0) {
-                                result = caller.instance({
-                                    url     : self.url,
-                                    hooks   : _hooks
-                                }).render(true);
-                                return result instanceof settings.classes.RESULT ? result.nodes() : null;
+                        controller  = null,
+                        build       = null,
+                        cache       = null,
+                        methods     = null,
+                        signature   = null,
+                        returning   = null,
+                        consts      = {
+                            maps: {
+                                MODEL   : 'model',
+                                DOM     : 'dom',
                             }
-                        }
-                    };
-                    hooks       = {
-                        build       : function (_hooks) {
-                            if (_hooks instanceof Array) {
-                                _hooks.forEach(function (_, index) {
-                                    _hooks[index] = hooks.build(_hooks[index]);
-                                });
-                            } else {
-                                if (_hooks !== null) {
-                                    _object(_hooks).forEach(function (hook_name, hook_value) {
-                                        if (typeof hook_value === 'function') {
-                                            _hooks[hook_name] = hook_value();
-                                        } else if (typeof hook_value === 'object' && hook_value !== null) {
-                                            hooks.convertObj(hook_value, _hooks, hook_name);
-                                            delete _hooks[hook_name];
+                        };
+                    mapping     = {
+                        get     : function(type){
+                            function getMap(url, hooks) {
+                                function proccess(_hooks, dest) {
+                                    _object(_hooks).forEach(function (name, inst) {
+                                        if (inst instanceof settings.classes.CALLER) {
+                                            dest[settings.other.SUBLEVEL_BEGIN + name + settings.other.SUBLEVEL_END] = getMap(inst.url, inst.hooks);
+                                        } else if (typeof inst === 'object' && inst !== null) {
+                                            dest[name] = {};
+                                            proccess(inst, dest[name]);
                                         }
                                     });
-                                }
-                            }
-                            return _hooks;
-                        },
-                        apply       : function (hooks, hook_setters, hooks_map) {
-                            if (hooks !== null) {
-                                _object(hook_setters).forEach(function (key, hook_setter) {
-                                    var value = null;
-                                    if (hooks[key] !== void 0) {
-                                        if (hooks[key] instanceof settings.classes.RESULT) {
-                                            map.        current[key]                        = hooks[key].map();
-                                            model.      current.model   ['__' + key + '__'] = hooks[key].model();
-                                            model.      current.binds   ['__' + key + '__'] = hooks[key].binds();
-                                            dom.        current         ['__' + key + '__'] = hooks[key].dom();
-                                            hooks_map[key]                                  = hooks[key].hooks_map()
-                                        }
-                                        hook_setter(hooks[key]);
-                                    } else {
-                                        hook_setter('');
-                                    }
-                                });
-                            }
-                        },
-                        convertObj  : function (hook_obj, _hooks, parent) {
-                            _object(hook_obj).forEach(function (key, value) {
-                                var path = parent + '.' + key;
-                                if (typeof value === 'object' && value !== null) {
-                                    hooks.convertObj(value, _hooks, path);
+                                };
+                                var defmap  = cache[url] === void 0 ? Source.storage.get(url).map()[type] : cache[url],
+                                    map     = [];
+                                cache[url] = defmap;
+                                if (hooks !== null) {
+                                    hooks.forEach(function (_hooks) {
+                                        var _map = _object(defmap).copy();
+                                        proccess(_hooks, _map);
+                                        map.push(_map);
+                                    });
                                 } else {
-                                    _hooks[path] = value;
+                                    map.push(_object(defmap).copy());
                                 }
-                            });
-                        }
-                    };
-                    map         = {
-                        current     : {},
-                        map         : {},
-                        update      : function (clone) {
-                            var iteration = {
-                                __context: clone.childNodes.length > 0 ? clone.childNodes[0] : null
+                                return map;
                             };
-                            if (typeof map.current === 'object' && map.current !== null) {
-                                _object(map.current).forEach(function (name, value) {
-                                    iteration[name] = value;
-                                });
-                            }
-                            if (map.map === null) {
-                                map.map = {};
-                            } else if (typeof map.map === 'object' && !(map.map instanceof Array)) {
-                                map.map = [map.map];
-                            }
-                            if (map.map instanceof Array) {
-                                map.map.push(iteration);
-                            } else {
-                                map.map = iteration;
-                            }
+                            var cache = {};
+                            return getMap(self.url, privates.hooks);
                         },
-                        reset       : function(){
-                            map.map = null;
-                        },
-                        iteration   : function () {
-                            map.current = {};
-                        },
-                        collapse    : function () {
-                            function convert(source) {
-                                var storage = null;
-                                if (source instanceof Array) {
-                                    storage = [];
-                                    source.forEach(function (value) {
-                                        storage.push(convert(value));
-                                    });
-                                } else {
-                                    storage = {};
-                                    if (source.__context !== void 0) {
-                                        storage.__context = instance.map.create(source.__context.parentNode);
+                        refs    : function () {
+                            function setValue(obj, path, val, caller) {
+                                var parts = path.split('.');
+                                parts.forEach(function (part, index) {
+                                    var src = null;
+                                    if (index < parts.length - 1) {
+                                        obj[part] === void 0 && (obj[part] = { url: '', hooks: {}});
+                                        obj = obj[part].hooks;
+                                    } else {
+                                        src         = Source.storage.get(val);
+                                        obj[part]   = { 
+                                            url         : val,
+                                            hooks       : {},
+                                            events      : src !== null ? src.map().events : null,
+                                            controller  : caller.controller !== null ? caller.controller : controllers.storage.get(val),
+                                            path        : path
+                                        };
                                     }
-                                    _object(source).forEach(function (name, value) {
-                                        if (name !== '__context') {
-                                            if (typeof value === 'object' || value instanceof Array) {
-                                                storage[name] = convert(value);
-                                            }
-                                        }
+                                });
+                            };
+                            function process(hooks, path) {
+                                if (helpers.isArray(hooks)) {
+                                    hooks.forEach(function (hooks) {
+                                        process(hooks, path);
+                                    });
+                                } else if (hooks instanceof settings.classes.CALLER) {
+                                    if (cache[path] === void 0) {
+                                        cache[path] = true;
+                                        setValue(map, path, hooks.url, hooks);
+                                    }
+                                    process(hooks.hooks, path);
+                                } else if (hooks instanceof Object) {
+                                    _object(hooks).forEach(function (prop, val) {
+                                        process(val, (path !== '' ? (path + '.') : '') + prop);
                                     });
                                 }
-                                return storage;
                             };
-                            return convert(map.map);
+                            var map     = privates.caller.map,
+                                cache   = {};
+                            if (Object.keys(map).length === 0) {
+                                map = defaultsmap.storage.get(self.url);
+                                map === null && (map = {});
+                            }
+                            if (Object.keys(map).length === 0) {
+                                process(privates.hooks, '');
+                            }
+                            privates.map.refs = {
+                                url         : self.url,
+                                hooks       : map,
+                                events      : self.source.map().events,
+                                controller  : privates.caller.controller !== null ? privates.caller.controller : controllers.storage.get(self.url),
+                                path        : ''
+                            };
                         }
                     };
                     model       = {
-                        current     : null,
-                        model       : null,
-                        binds       : null,
-                        map         : function (clone, defaults) {
-                            var model_nodes = _nodes('*[' + settings.css.attrs.MODEL_DATA + ']', false, clone).target;
-                            //Add models, which binded with nodes
-                            if (model_nodes.length > 0) {
-                                Array.prototype.forEach.call(model_nodes, function (model_node) {
-                                    var models = JSON.parse(model_node.getAttribute(settings.css.attrs.MODEL_DATA));
-                                    if (models instanceof Array) {
-                                        models.forEach(function (_model) {
-                                            var textNode = null;
-                                            if (model.current.binds[_model.model] === void 0) {
-                                                model.current.binds[_model.model] = [];
-                                            }
-                                            if (_model.text !== void 0) {
-                                                textNode = helpers.getTextNode(model_node, _model.text);
-                                                if (textNode !== null) {
-                                                    textNode.nodeValue = defaults[_model.model] !== void 0 ? defaults[_model.model] : '';
-                                                    model.current.binds[_model.model].push({
-                                                        node    : textNode,
-                                                        attr    : null,
-                                                        prop    : 'nodeValue',
-                                                        style   : null
-                                                    });
-                                                }
-                                            } else {
-                                                model.current.binds[_model.model].push({
-                                                    node    : model_node,
-                                                    attr    : _model.attr   === void 0 ? null : _model.attr,
-                                                    prop    : _model.prop   === void 0 ? null : _model.prop,
-                                                    style   : _model.style  === void 0 ? null : _model.style,
-                                                });
-                                            }
-                                        });
-                                    }
+                        nodes       : function (){
+                            var nodes       = _nodes('.' + settings.css.classes.MODEL_NODE, false, privates.wrapper).target,
+                                res         = {},
+                                cache       = {};
+                            if (nodes !== null && nodes.length > 0) {
+                                Array.prototype.forEach.call(nodes, function (node) {
+                                    var ref     = node.innerHTML,
+                                        _ref    = cache[ref] !== void 0 ? cache[ref] : ref.replace(settings.regs.MODEL_BORDERS, ''),
+                                        _node   = document.createTextNode('');
+                                    cache[ref]  = _ref;
+                                    res[_ref]   = res[_ref] === void 0 ? [] : res[_ref];
+                                    node.parentNode.insertBefore(_node, node);
+                                    node.parentNode.removeChild(node);
+                                    res[_ref].push(_node);
                                 });
                             }
-                            //Add models, which doesn't binded with nodes
-                            _object(defaults).forEach(function (name, value) {
-                                if (model.current.binds[name] === void 0) {
-                                    model.current.binds[name] = value;
-                                }
-                            });
-                            return model.current.binds;
+                            return res;
                         },
-                        update      : function (clone, defaults) {
-                            function bind(group, binds) {
-                                function correctStyle(prop) {
-                                    var result = '';
-                                    prop.split('-').forEach(function (part, index) {
-                                        if (index > 0) {
-                                            part = String.prototype.toUpperCase.apply(part.charAt(0)) + part.substr(1, part.length - 1);
-                                        }
-                                        result += part;
-                                    });
-                                    return result;
-                                };
-                                function executeHandles(handles, _this, arg_1, arg_2) {
-                                    var state_code = arg_1 + arg_2;
-                                    if (handles instanceof Array) {
-                                        handles.forEach(function (handle) {
-                                            if (handle.state_code !== state_code) {
-                                                handle.state_code = state_code;
-                                                handle.call(_this, arg_1, arg_2);
-                                            }
+                        attrs       : function (){
+                            var nodes       = _nodes('*[' + settings.css.attrs.MODEL + ']', false, privates.wrapper).target,
+                                res         = {},
+                                cache       = {};
+                            if (nodes !== null && nodes.length > 0) {
+                                Array.prototype.forEach.call(nodes, function (node) {
+                                    var attr    = node.getAttribute(settings.css.attrs.MODEL),
+                                        scheme  = cache[attr] !== void 0 ? cache[attr] : JSON.parse(attr);
+                                    cache[attr] = scheme;
+                                    _object(scheme).forEach(function (attr, ref) {
+                                        res[ref] = res[ref] === void 0 ? [] : res[ref];
+                                        res[ref].push({
+                                            node    : node,
+                                            attr    : attr
                                         });
-                                    }
-                                };
-                                function income(key, node, binds, handles, prop) {
-                                    if (node.attr !== null) {
-                                        (function (binds, key, node, attr_name, handles) {
-                                            _node(node).bindingAttrs().bind(attr_name, function (attr_name, current, previous) {
-                                                if (binds[key] !== current) {
-                                                    binds[key] = current;
-                                                    executeHandles(handles, this, attr_name, current);
-                                                }
-                                            });
-                                        }(binds, key, node.node, node.attr, handles));
-                                    }
-                                    if (node.style !== null) {
-                                        (function (binds, key, node, prop, handles) {
-                                            _node(node).bindingProps().bind('style.' + prop, function (prop, current, previous) {
-                                                if (binds[key] !== current) {
-                                                    binds[key] = current;
-                                                    executeHandles(handles, this, prop, current);
-                                                }
-                                            });
-                                        }(binds, key, node.node, correctStyle(node.style), handles));
-                                    }
-                                    if (helpers.binds.isPossible(node.node, prop)) {
-                                        (function (binds, key, node, attr_name, handles) {
-                                            helpers.binds.assing(node, prop, function (event, getter, setter) {
-                                                var current = getter();
-                                                if (binds[key] !== current) {
-                                                    binds[key]  = current;
-                                                    executeHandles(handles, this, attr_name, current);
-                                                }
-                                            });
-                                        }(binds, key, node.node, node.attr, handles));
+                                    });
+                                    node.removeAttribute(settings.css.attrs.MODEL);
+                                });
+                            }
+                            return res;
+                        },
+                        bind        : function (){
+                            function isSubPattern(path) {
+                                var refs    = privates.map.refs,
+                                    parts   = path.split('.'),
+                                    res     = true;
+                                parts.forEach(function (part) {
+                                    if (refs !== null && refs.hooks[part] !== void 0) {
+                                        refs = refs.hooks[part];
                                     } else {
-                                        if (node.prop !== null) {
-                                            (function (binds, key, node, prop, handles) {
-                                                _node(node).bindingProps().bind(prop, function (prop, current, previous) {
-                                                    if (binds[key] !== current) {
-                                                        binds[key] = current;
-                                                        executeHandles(handles, this, prop, current);
-                                                    }
-                                                });
-                                            }(binds, key, node.node, node.prop, handles));
+                                        res = false;
+                                    }
+                                });
+                                return res;
+                            };
+                            function getMap(url, hooks, path) {
+                                function proccess(_hooks, dest, path) {
+                                    _object(_hooks).forEach(function (name, inst) {
+                                        var ref = name;
+                                        if (inst instanceof settings.classes.CALLER) {
+                                            ref         = settings.other.SUBLEVEL_BEGIN + ref + settings.other.SUBLEVEL_END;
+                                            dest[ref]   = getMap(inst.url, inst.hooks, path + (path === '' ? '' : '.') + ref);
+                                        } else if (typeof inst === 'object' && inst !== null) {
+                                            dest[ref]   = {};
+                                            proccess(inst, dest[ref], path + (path === '' ? '' : '.') + ref);
+                                        } else if (inst === null || inst === void 0) {
+                                            if (isSubPattern((path !== '' ? path + '.' : '') + name)) {
+                                                ref         = settings.other.SUBLEVEL_BEGIN + ref + settings.other.SUBLEVEL_END;
+                                                dest[ref] = new ExArray();
+                                            }
                                         }
-                                    }
+                                    });
                                 };
-                                function outcome(key, node, binds, handles, prop) {
-                                    if (node.attr !== null) {
-                                        (function (binds, key, node, attr_name, handles) {
-                                            binds[key] = node.getAttribute(attr_name);
-                                            _object(binds).binding().bind(key, function (current, previous) {
-                                                var execute = false;
-                                                if (node.getAttribute(attr_name) !== current) {
-                                                    node.setAttribute(attr_name, current);
-                                                    execute = true;
-                                                }
-                                                if (node[attr_name] !== void 0) {
-                                                    if (node[attr_name] !== current) {
-                                                        node[attr_name] = current;
-                                                        execute = true;
-                                                    }
-                                                }
-                                                if (execute) {
-                                                    executeHandles(handles, node, attr_name, current);
-                                                }
-                                            });
-                                        }(binds, key, node.node, node.attr, handles));
-                                    } 
-                                    if (node.style !== null) {
-                                        (function (binds, key, node, prop, handles) {
-                                            binds[key] = node.style[prop];
-                                            _object(binds).binding().bind(key, function (current, previous) {
-                                                if (node.style[prop] !== current) {
-                                                    node.style[prop] = current;
-                                                    executeHandles(handles, node.style, prop, current);
-                                                }
-                                            });
-                                        }(binds, key, node.node, correctStyle(node.style), handles));
-                                    }
-                                    if (node.prop !== null) {
-                                        if (node.node[prop] !== void 0) {
-                                            (function (binds, key, node, prop, handles) {
-                                                binds[key] = node[prop];
-                                                _object(binds).binding().bind(key, function (current, previous) {
-                                                    if (node[prop] !== current) {
-                                                        node[prop] = current;
-                                                        executeHandles(handles, node, prop, current);
-                                                    }
-                                                });
-                                            }(binds, key, node.node, prop, handles));
-                                        }
-                                    }
-                                };
-                                if (group !== null) {
-                                    _object(group).forEach(function (key, nodes) {
-                                        var handles = [];
-                                        if (!helpers.testReg(settings.regs.GROUP_PROPERTY, key)) {
-                                            binds[key] = null;
-                                            if (nodes instanceof Array) {
-                                                nodes.forEach(function (node) {
-                                                    var prop = node.prop !== null ? node.prop : node.attr;
-                                                    node.node[settings.storage.NODE_BINDING_DATA] = {
-                                                        outcome_call: false
-                                                    };
-                                                    income  (key, node, binds, handles, prop);
-                                                    outcome (key, node, binds, handles, prop);
-                                                });
-                                            } else {
-                                                (function (binds, key,  value, handles) {
-                                                    binds[key] = value;
-                                                    _object(binds).binding().bind(key, function (current, previous) {
-                                                        executeHandles(handles, null, null, current);
+                                var defmap      = cache[url] === void 0 ? Source.storage.get(url).binding.model() : cache[url],
+                                    map         = new ExArray(),
+                                    bind_parent = privates.wrapper.children.length === 1 ? privates.wrapper.children[0] : null;
+                                cache[url]  = defmap;
+                                if (hooks !== null) {
+                                    hooks.forEach(function (_hooks) {
+                                        var _map = Object.create(defmap);
+                                        flex.oop.objects.copy(defmap, _map);
+                                        _object(_map).forEach(function (prop, val) {
+                                            var _prop       = path + (path === '' ? '' : '.') + prop,
+                                                attr        = null,
+                                                default_val = null;
+                                            if (nodes[_prop] !== void 0 && nodes[_prop].length > 0) {
+                                                (function (node) {
+                                                    _map[settings.other.BIND_PREFIX + prop].bind(function (current, previous) {
+                                                        node.nodeValue = current;
                                                     });
-                                                }(binds, key, nodes, handles));
+                                                }(nodes[_prop][0]));
+                                                nodes[_prop].splice(0, 1);
                                             }
-                                            group[key] = {
-                                                addHandle   : function (handle) {
-                                                    handle.state_code = null;
-                                                    handle.id = flex.unique();
-                                                    this.handles.push(handle);
-                                                    return handle.id;
-                                                },
-                                                removeHandle: function (id) {
-                                                    var index = -1;
-                                                    this.handles.forEach(function (handle, _index) {
-                                                        if (handle.id === id) {
-                                                            index = _index;
-                                                        }
-                                                    });
-                                                    if (index !== -1) {
-                                                        this.handles.splice(index, 1);
-                                                    }
-                                                },
-                                                handles     : handles
-                                            };
-                                            group[key].addHandle.   bind(group[key]);
-                                            group[key].removeHandle.bind(group[key]);
-                                        }
-                                    });
-                                }
-                            };
-                            model.map(clone, defaults);
-                            bind(model.current.binds, model.current.model);
-                            if (model.model === null) {
-                                model.model = {};
-                            } else if (typeof model.model === 'object' && !(model.model instanceof Array)) {
-                                model.model = [model.model];
-                            }
-                            if (model.model instanceof Array) {
-                                model.model.push(model.current.model);
-                            } else {
-                                model.model = model.current.model;
-                            }
-                            if (model.binds === null) {
-                                model.binds = {};
-                            } else if (typeof model.binds === 'object' && !(model.binds instanceof Array)) {
-                                model.binds = [model.binds];
-                            }
-                            if (model.binds instanceof Array) {
-                                model.binds.push(model.current.binds);
-                            } else {
-                                model.binds = model.current.binds;
-                            }
-                        },
-                        clear       : function (clone) {
-                            var model_nodes = _nodes('*[' + settings.css.attrs.MODEL_DATA + ']', false, clone).target;
-                            if (model_nodes.length > 0) {
-                                Array.prototype.forEach.call(model_nodes, function (model_node) {
-                                    model_node.removeAttribute(settings.css.attrs.MODEL_DATA);
-                                });
-                            }
-                        },
-                        reset       : function (){
-                            model.model = null;
-                            model.binds = null;
-                        },
-                        iteration   : function () {
-                            model.current = {
-                                model: {},
-                                binds: {}
-                            };
-                        },
-                        getLast     : function () {
-                            var last = {
-                                model : model.model instanceof Array ? model.model[model.model.length - 1] : model.model,
-                                binds : model.binds instanceof Array ? model.binds[model.binds.length - 1] : model.binds
-                            };
-                            return last;
-                        },
-                        getDefaults : function (_hooks, setters){
-                            var defaults = {};
-                            _object(_hooks).forEach(function (name, value) {
-                                if (setters[name] === void 0) {
-                                    defaults[name] = value;
-                                }
-                            });
-                            return defaults;
-                        }
-                    };
-                    dom         = {
-                        current     : null,
-                        dom         : null,
-                        update      : function (_dom) {
-                            if (Object.keys(dom.current).length > 0) {
-                                _object(dom.current).forEach(function (key, value) {
-                                    _dom[key] = value;
-                                });
-                            }
-                            if (dom.dom === null) {
-                                dom.dom = {};
-                            } else if (typeof dom.dom === 'object' && !(dom.dom instanceof Array)) {
-                                dom.dom = [dom.dom];
-                            }
-                            if (dom.dom instanceof Array) {
-                                dom.dom.push(_dom);
-                            } else {
-                                dom.dom = _dom;
-                            }
-                        },
-                        reset       : function(){
-                            dom.dom = null;
-                        },
-                        iteration   : function () {
-                            dom.current = {};
-                        },
-                        collapse    : function () {
-                            function process(source, storage, indexes) {
-                                function addIndexes(nodes, indexes) {
-                                    function toNodeList(nodeList, indexes) {
-                                        Array.prototype.forEach.call(nodeList, function (node, index) {
-                                            var __indexes = nodeList.length > 1 ? indexes.concat([index]) : indexes;
-                                            if (node[settings.other.INDEXES] === void 0 || node[settings.other.INDEXES].length < __indexes.length) {
-                                                node[settings.other.INDEXES] = nodeList.length > 1 ? indexes.concat([index]) : indexes;
-                                            }
-                                        });
-                                    };
-                                    if (nodes instanceof NodeList) {
-                                        toNodeList(nodes, indexes);
-                                    } else if (nodes instanceof instance.nodeList.NODE_LIST) {
-                                        nodes.collections.forEach(function (collection) {
-                                            toNodeList(collection, indexes);
-                                        });
-                                    }
-                                };
-                                function getFromArray(source, storage, indexes) {
-                                    var names       = [],
-                                        sub_objs    = [];
-                                    if (source.length > 0 && typeof source[0] === 'object' && source[0] !== null) {
-                                        _object(source[0]).forEach(function (name) {
-                                            names.push(name);
-                                        });
-                                        names.forEach(function (name) {
-                                            storage[name] = [];
-                                            source.forEach(function (value, index) {
-                                                if (value[name] instanceof NodeList || value[name] instanceof instance.nodeList.NODE_LIST) {
-                                                    storage[name].push(value[name]);
-                                                    addIndexes(value[name], indexes.concat([index]));
-                                                } else if (value[name] instanceof Array) {
-                                                    storage[name].push({});
-                                                    getFromArray(value[name], storage[name][storage[name].length - 1], indexes.concat([index]));
-                                                    if (sub_objs.indexOf(name) === -1) {
-                                                        sub_objs.push(name);
-                                                    }
-                                                } else if (typeof value[name] === 'object' && value[name] !== null && !(value[name] instanceof instance.nodeList.NODE_LIST)) {
-                                                    storage[name].push(value[name]);
-                                                    if (sub_objs.indexOf(name) === -1) {
-                                                        sub_objs.push(name);
-                                                    }
-                                                }
-                                            });
-                                        });
-                                        sub_objs.forEach(function (name) {
-                                            var source = storage[name];
-                                            storage[name] = {};
-                                            getFromArray(source, storage[name], indexes);
-                                        });
-                                        _object(storage).forEach(function (name, value) {
-                                            var collection = instance.nodeList.create();
-                                            if (value instanceof Array) {
-                                                value.forEach(function (nodeList) {
-                                                    collection.add(nodeList);
-                                                });
-                                                storage[name] = collection;
-                                            }
-                                        });
-                                        return storage[name];
-                                    }
-                                };
-                                _object(source).forEach(function (name, value) {
-                                    if (value instanceof Array) {
-                                        storage[name] = {};
-                                        getFromArray(value, storage[name], indexes);
-                                    } else if (value instanceof NodeList) {
-                                        addIndexes(value, indexes);
-                                        storage[name] = instance.nodeList.create(value);
-                                    } else if (typeof value === 'object') {
-                                        storage[name] = {};
-                                        process(value, storage[name], indexes);
-                                    }
-                                });
-                            };
-                            function wrap(source) {
-                                var result = null;
-                                if (source instanceof Array) {
-                                    result = [];
-                                    source.forEach(function (item) {
-                                        result.push(wrap(item));
-                                    });
-                                } else if (source instanceof NodeList) {
-                                    result = instance.nodeList.create(source);
-                                } else if (typeof source === 'object' && source !== null && !(source instanceof instance.nodeList.NODE_LIST)) {
-                                    result = {};
-                                    _object(source).forEach(function (name, value) {
-                                        result[name] = wrap(value);
-                                    });
-                                }
-                                return result;
-                            };
-                            var _dom = {};
-                            if (dom.dom !== null) {
-                                process(dom.dom, _dom, []);
-                            }
-                            return {
-                                listed  : wrap(dom.dom),
-                                grouped: _dom
-                            };
-                        }
-                    };
-                    condition   = {
-                        get         : function (_hooks, _conditions) {
-                            var result = {};
-                            if (_conditions !== null) {
-                                _object(_conditions).forEach(function (name, handle) {
-                                    result[name] = handle(_hooks);
-                                });
-                            }
-                            return Object.keys(result).length > 0 ? result : null;
-                        },
-                        setDefault  : function (_conditions) {
-                            var defaults = conditions.storage.get(self.url);
-                            if (typeof defaults === 'object' && defaults !== null) {
-                                if (typeof _conditions !== 'object' || _conditions === null) {
-                                    _conditions = {};
-                                }
-                                _object(defaults).forEach(function (name, value) {
-                                    if (_conditions[name] === void 0) {
-                                        _conditions[name] = value;
-                                    }
-                                });
-                                _conditions = Object.keys(_conditions).length > 0 ? _conditions : null;
-                            }
-                            return _conditions;
-                        },
-                        tracking    : function (_conditions, conditions_dom, _hooks) {
-                            var handles = [];
-                            if (typeof _conditions === 'object' && _conditions !== null) {
-                                _object(_conditions).forEach(function (con_name, con_value) {
-                                    if (typeof con_value === 'function') {
-                                        if (con_value.tracking !== void 0 && conditions_dom[con_name] !== void 0) {
-                                            con_value.tracking = con_value.tracking instanceof Array ? con_value.tracking : [con_value.tracking];
-                                            con_value.tracking.forEach(function (tracked) {
-                                                var data    = {},
-                                                    _model  = model.getLast(),
-                                                    handle  = null;
-                                                if (_model.binds[tracked] !== void 0) {
-                                                    if (typeof _model.binds[tracked].addHandle === 'function') {
-                                                        _object(_hooks).forEach(function (hook_name, hook_value) {
-                                                            if (_model.model[hook_name] !== void 0) {
-                                                                data[hook_name] = function getModelValue() { return _model.model[hook_name]; };
-                                                            } else {
-                                                                data[hook_name] = hook_value;
+                                            if (attrs[_prop] !== void 0 && attrs[_prop].length > 0) {
+                                                attr = attrs[_prop][0].attr;
+                                                (function (node) {
+                                                    if (helpers.binds.isPossible(node, attr)) {
+                                                        helpers.binds.assing(node, attr, function (event, getter, setter) {
+                                                            var val = getter();
+                                                            if (_map[prop] !== val) {
+                                                                _map[prop] = val;
                                                             }
                                                         });
-                                                        handle = (function (_conditions, con_name, _data, conditions_dom) {
-                                                            return function trackingHandle() {
-                                                                var data    = {},
-                                                                    result  = null;
-                                                                _object(_data).forEach(function (data_name, data_value) {
-                                                                    data[data_name] = typeof data_value === 'function' ? data_value() : data_value;
-                                                                });
-                                                                result = _conditions[con_name](data);
-                                                                if (conditions_dom[con_name].__included.length > 0) {
-                                                                    conditions_dom[con_name].__included.forEach(function (con_name) {
-                                                                        if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
-                                                                            if (_conditions[con_name].tracking !== void 0) {
-                                                                                conditions_dom[con_name].__unblock();
-                                                                            }
-                                                                        }
-                                                                    });
-                                                                }
-                                                                conditions_dom[con_name].__update(result);
-                                                                if (conditions_dom[con_name][result] !== void 0 && conditions_dom[con_name][result].included.length > 0) {
-                                                                    conditions_dom[con_name][result].included.forEach(function (con_name) {
-                                                                        var res = null;
-                                                                        if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
-                                                                            if (_conditions[con_name].tracking !== void 0) {
-                                                                                res = _conditions[con_name](data);
-                                                                                conditions_dom[con_name].__update(res);
-                                                                            }
-                                                                        }
-                                                                    });
-                                                                }
-                                                                if (conditions_dom[con_name].__included.length > 0) {
-                                                                    conditions_dom[con_name].__included.forEach(function (con_name) {
-                                                                        if (typeof _conditions[con_name] === 'function' && conditions_dom[con_name] !== void 0) {
-                                                                            if (_conditions[con_name].tracking !== void 0) {
-                                                                                conditions_dom[con_name].__block();
-                                                                            }
-                                                                        }
-                                                                    });
-                                                                }
-                                                            };
-                                                        }(_conditions, con_name, data, conditions_dom));
-                                                        _model.binds[tracked].addHandle(handle);
-                                                        handles.push(handle);
                                                     }
+                                                    _map[settings.other.BIND_PREFIX + prop].bind(function (current, previous) {
+                                                        var parts   = attr.split('.'),
+                                                            dest    = node;
+                                                        if (parts.length === 1) {
+                                                            if (node.getAttribute(attr) !== current) {
+                                                                node.setAttribute(attr, current);
+                                                            }
+                                                        } else if (parts.length === 1 && node[attr] !== void 0){
+                                                            if (node[attr] !== current) {
+                                                                node[attr] = current;
+                                                            }
+                                                        } else {
+                                                            parts.forEach(function (part, index) {
+                                                                if (index !== parts.length - 1) {
+                                                                    dest = dest !== null ? (dest[part] !== void 0 ? dest[part] : null) : null;
+                                                                } else if (dest !== null) {
+                                                                    if (dest[part] !== void 0 && dest[part] !== current) {
+                                                                        dest[part] = current;
+                                                                    }
+                                                                }
+                                                            });
+                                                        }
+                                                    });
+                                                    if (bind_parent !== null){
+                                                        if (attr.indexOf('.') === -1 && node[attr] === void 0) {
+                                                            //Bind attribute
+                                                            _node(node).bindingAttrs().bind(attr, function (attr, current, previous, mutation, id) {
+                                                                if (_map[prop] !== current) {
+                                                                    _map[prop] = current;
+                                                                }
+                                                            }, bind_parent);
+                                                        } else {
+                                                            //Bind property
+                                                            _node(node).bindingProps().bind(attr, function (attr, current, previous, mutation, id) {
+                                                                if (_map[prop] !== current) {
+                                                                    _map[prop] = current;
+                                                                }
+                                                            }, bind_parent);
+                                                        }
+                                                    }
+                                                }(attrs[_prop][0].node));
+                                                attrs[_prop].splice(0, 1);
+                                            }
+                                            if (_hooks[prop] !== void 0 && !(_hooks[prop] instanceof settings.classes.CALLER) && !(_hooks[prop] instanceof Object)) {
+                                                if (typeof _hooks[prop] === 'function') {
+                                                    default_val = _hooks[prop]();
+                                                } else if (typeof _hooks[prop] === 'string') {
+                                                    default_val = _hooks[prop];
+                                                } else if (typeof _hooks[prop].toString === 'function') {
+                                                    default_val = _hooks[prop].toString();
+                                                }
+                                                _map[prop] = default_val;
+                                            }
+                                        });
+                                        proccess(_hooks, _map, path);
+                                        map.push(_map);
+                                    });
+                                } else {
+                                    map.push(_object(defmap).copy());
+                                }
+                                return map;
+                            };
+                            var cache = {},
+                                nodes = model.nodes(),
+                                attrs = model.attrs();
+                            privates.map.model = getMap(self.url, privates.hooks, '');
+                        },
+                        combine     : function () {
+                            function process(dom, model, path) {
+                                function obj(dom, model, path) {
+                                    _object(dom).forEach(function (prop, val) {
+                                        if (val instanceof addition.nodeList.NODE_LIST) {
+                                            model[settings.other.DOM_PREFIX + prop] = val;
+                                            privates.cache.dom[prop] === void 0 && (privates.cache.dom[prop] = []);
+                                            privates.cache.dom[prop].push({
+                                                nodeList    : val,
+                                                path        : path
+                                            });
+                                        } else if (helpers.isArray(val)) {
+                                            model[prop] = model[prop] !== void 0 ? model[prop] : [];
+                                            process(val, model[prop], (path !== '' ? path + '.' : '') + prop.replace(borders, ''));
+                                        } else if (val instanceof Object) {
+                                            model[prop] = model[prop] !== void 0 ? model[prop] : {};
+                                            obj(val, model[prop], (path !== '' ? path + '.' : '') + prop.replace(borders, ''));
+                                        }
+                                    });
+                                };
+                                dom.forEach(function (_dom, index) {
+                                    if (model[index] === void 0) {
+                                        model.push({});
+                                    }
+                                    obj(dom[index], model[index], path);
+                                });
+                            };
+                            var _dom    = dom.bind(),
+                                borders = new RegExp('^' + settings.other.SUBLEVEL_BEGIN + '|' + settings.other.SUBLEVEL_END + '$', 'gi');
+                            if (helpers.isArray(_dom)) {
+                                privates.map.model = helpers.isArray(privates.map.model) ? privates.map.model : new ExArray();
+                                process(_dom, privates.map.model, '');
+                            }
+                        },
+                        finalize    : function () {
+                            function getMap(path) {
+                                var parts   = path.split('.'),
+                                    obj     = privates.map.refs;
+                                if (obj !== null) {
+                                    parts.forEach(function (part) {
+                                        if (obj.hooks !== void 0 && obj.hooks[part] !== void 0) {
+                                            obj = obj.hooks[part];
+                                        }
+                                    });
+                                }
+                                return obj;
+                            };
+                            function getRef(path) {
+                                var parts   = path.split('.'),
+                                    obj     = privates.map.refs,
+                                    ref     = null;
+                                if (obj !== null) {
+                                    parts.forEach(function (part) {
+                                        if (obj.hooks !== void 0 && obj.hooks[part] !== void 0 && ref !== false) {
+                                            obj = obj.hooks[part];
+                                            ref = obj.url;
+                                        } else {
+                                            ref = false;
+                                        }
+                                    });
+                                }
+                                return ref === null ? false : ref;
+                            };
+                            function bind(target, path, url) {
+                                function getPath(path) {
+                                    var parts = path.split('.'),
+                                        _path = '';
+                                    parts.forEach(function (part) {
+                                        _path += (_path !== '' ? '.' : '') + settings.other.SUBLEVEL_BEGIN + part + settings.other.SUBLEVEL_END;
+                                    });
+                                    return _path;
+                                }
+                                var _path       = cache[path] === void 0 ? getPath(path) : cache[path],
+                                    anchor      = hooks.anchors.get(_path),
+                                    collection  = null;
+                                cache[path] = _path;
+                                if (anchor !== null) {
+                                    collection = model.collection(url, anchor, target, getMap(path), dom.indexes);
+                                    target.bind('add',      collection.add      );
+                                    target.bind('remove',   collection.remove   );
+                                } else {
+                                    flex.logs.log(signature() + logs.pattern.CANNOT_DETECT_HOOK_ANCHOR, flex.logs.types.WARNING);
+                                }
+                            };
+                            function process(hooks, model, path) {
+                                function obj(hooks, model, path) {
+                                    _object(hooks).forEach(function (prop, val) {
+                                        var ref = null,
+                                            url = null;
+                                        if (val instanceof settings.classes.CALLER) {
+                                            ref = settings.other.SUBLEVEL_BEGIN + prop + settings.other.SUBLEVEL_END;
+                                            model[ref] === void 0 && (model[ref] = new ExArray());
+                                            bind(model[ref], (path !== '' ? path + '.' : '') + prop, val.url);
+                                            process(val.hooks, model[ref], (path !== '' ? path + '.' : '') + prop);
+                                        } else if (val instanceof Object) {
+                                            model[prop] === void 0 && (model[prop] = {});
+                                            obj(val, model[prop], (path !== '' ? path + '.' : '') + prop);
+                                        } else {
+                                            if (val === null) {
+                                                url = getRef((path !== '' ? path + '.' : '') + prop);
+                                                if (url !== false) {
+                                                    ref = settings.other.SUBLEVEL_BEGIN + prop + settings.other.SUBLEVEL_END;
+                                                    model[ref] === void 0 && (model[ref] = new ExArray());
+                                                    bind(model[ref], (path !== '' ? path + '.' : '') + prop, url);
+                                                } else {
+                                                    model[prop] === void 0 && (model[prop] = val);
+                                                }
+                                            } else {
+                                                model[prop] === void 0 && (model[prop] = val);
+                                            }
+                                        }
+                                    });
+                                };
+                                hooks.forEach(function (hooks, index) {
+                                    model[index] === void 0 && model.push({});
+                                    obj(hooks, model[index], path);
+                                });
+                            };
+                            var cache = {};
+                            if (helpers.isArray(privates.hooks)) {
+                                privates.map.model = helpers.isArray(privates.map.model) ? privates.map.model : new ExArray();
+                                process(privates.hooks, privates.map.model, '');
+                            }
+                            return privates.map.model;
+                        },
+                        collection  : function (url, anchor, parent, refs, indexesUpdate) {
+                            var Collection = function (url, anchor) {
+                                var self            = this,
+                                    add             = null,
+                                    getStartIndex   = null,
+                                    mount           = null,
+                                    unmount         = null,
+                                    remove          = null,
+                                    hooks           = null,
+                                    update          = indexesUpdate,
+                                    dom             = null;
+                                this.url        = url;
+                                this.anchor     = anchor;
+                                this.parent     = parent;
+                                this.refs       = refs;
+                                this.start      = null;
+                                getStartIndex   = function getStartIndex() {
+                                    var parent = self.anchor.parentNode,
+                                        target = null;
+                                    if (self.start === null) {
+                                        try {
+                                            Array.prototype.forEach.call(parent.childNodes, function (node) {
+                                                if (node === self.anchor) {
+                                                    throw 'found';
+                                                }
+                                                if (node instanceof Element) {
+                                                    target = node;
                                                 }
                                             });
+                                        } catch (e) { }
+                                        if (target !== null) {
+                                            self.start = Array.prototype.indexOf.call(parent.children, target) + 1;
                                         } else {
-                                            var result = con_value(_hooks);
-                                            if (conditions_dom[con_name] !== void 0) {
-                                                _object(conditions_dom[con_name]).forEach(function (res, methods) {
-                                                    if (res !== result && methods.del !== void 0) {
-                                                        methods.del();
-                                                        conditions_dom[con_name][res] = null;
-                                                        delete conditions_dom[con_name][res];
+                                            self.start = 0;
+                                        }
+                                    }
+                                    return self.start;
+                                };
+                                mount           = function mount(nodes, index, count) {
+                                    var parent  = self.anchor.parentNode,
+                                        mark    = null,
+                                        start   = getStartIndex(),
+                                        finish  = start + (self.parent.length - 2);
+                                    if (self.parent.length - 1 === index + (count - 1)) {
+                                        if (parent.children.length - 1 > finish) {
+                                            mark = parent.children[finish + 1];
+                                            for (var i = nodes.length - 1; i >= 0; i -= 1) {
+                                                parent.insertBefore(nodes[0], mark);
+                                            }
+                                        } else {
+                                            for (var i = nodes.length - 1; i >= 0; i -= 1) {
+                                                parent.appendChild(nodes[0]);
+                                            }
+                                        }
+                                    } else if (parent.children[start + index] !== void 0) {
+                                        mark = parent.children[start + index];
+                                        for (var i = nodes.length - 1; i >= 0; i -= 1) {
+                                            parent.insertBefore(nodes[0], mark);
+                                        }
+                                    }
+                                };
+                                unmount         = function unmount(index, count) {
+                                    var children    = self.anchor.parentNode !== null ? self.anchor.parentNode.children : null,
+                                        target      = null,
+                                        start       = getStartIndex();
+                                    if (children.length !== null && children[start + index] !== void 0) {
+                                        for (var i = count - 1; i >= 0; i -= 1) {
+                                            target = children[start + index + i];
+                                            target.parentNode.removeChild(target);
+                                        }
+                                    }
+                                };
+                                hooks           = function hooks(src, map) {
+                                    var map = map === null ? null : (map.hooks !== void 0 ? map.hooks : null);
+                                    if (map !== null) {
+                                        src.forEach(function (_hooks, index) {
+                                            _object(_hooks).forEach(function (prop, val) {
+                                                if (map[prop] !== void 0) {
+                                                    src[index][prop] = Caller.instance({
+                                                        url     : map[prop].url,
+                                                        hooks   : hooks(helpers.isArray(val) ? val : [val], map[prop])
+                                                    });
+                                                }
+                                            });
+                                        });
+                                    }
+                                    return src;
+                                };
+                                add             = function add(event) {
+                                    var added   = helpers.isArray(event.item) ? event.item : [event.item],
+                                        inst    = Caller.instance({
+                                            url     : self.url,
+                                            hooks   : hooks(added, self.refs)
+                                        });
+                                    inst        = inst.build();
+                                    added.forEach(function (item, index) {
+                                        self.parent[event.index + index] = inst.model[index].length === 1 ? inst.model[index][0] : inst.model[index];
+                                    });
+                                    mount(inst.nodes, event.index, event.count);
+                                    dom.add(inst.model);
+                                    update();
+                                    return void 0;
+                                };
+                                remove          = function remove(event) {
+                                    unmount(event.index, event.count);
+                                    dom.remove(helpers.isArray(event.item) ? event.item : [event.item]);
+                                    update();
+                                    return void 0;
+                                };
+                                dom             = {
+                                    add     : function (models) {
+                                        models.forEach(function (model) {
+                                            if (model instanceof Object) {
+                                                _object(model).forEach(function (prop, val) {
+                                                    if (val instanceof addition.nodeList.NODE_LIST) {
+                                                        self.parent[prop] === void 0 && (self.parent[prop] = addition.nodeList.create());
+                                                        self.parent[prop].add(val);
                                                     }
                                                 });
                                             }
+                                        });
+                                    },
+                                    remove  : function (models) {
+                                        models.forEach(function (model) {
+                                            if (model instanceof Object) {
+                                                _object(model).forEach(function (prop, val) {
+                                                    if (val instanceof addition.nodeList.NODE_LIST && self.parent[prop] !== void 0) {
+                                                        self.parent[prop] === void 0 && (self.parent[prop] = addition.nodeList.create());
+                                                        self.parent[prop].exclude(val);
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    }
+                                };
+                                return {
+                                    add     : add,
+                                    remove  : remove
+                                }
+                            };
+                            return new Collection(url, anchor);
+                        },
+                    };
+                    dom         = {
+                        nodes   : function () {
+                            var nodes       = _nodes('*[' + settings.css.attrs.DOM + ']', false, privates.wrapper).target,
+                                res         = {},
+                                cache       = {};
+                            if (nodes !== null && nodes.length > 0) {
+                                Array.prototype.forEach.call(nodes, function (node) {
+                                    var attr    = node.getAttribute(settings.css.attrs.DOM),
+                                        names   = cache[attr] !== void 0 ? cache[attr] : attr.split(',');
+                                    cache[attr] = names;
+                                    names.forEach(function (ref) {
+                                        res[ref] = res[ref] === void 0 ? [] : res[ref];
+                                        res[ref].push(node);
+                                    });
+                                    node.removeAttribute(settings.css.attrs.DOM);
+                                });
+                            }
+                            return res;
+                        },
+                        bind    : function (){
+                            function getMap(map, path) {
+                                var res = null;
+                                if (map instanceof Array) {
+                                    res = [];
+                                    map.forEach(function (item) {
+                                        res.push(getMap(item, path));
+                                    });
+                                } else if (typeof map === 'object') {
+                                    res = {};
+                                    _object(map).forEach(function (prop, val) {
+                                        res[prop] = getMap(val, path + (path === '' ? '' : '.') + prop);
+                                    });
+                                } else if (typeof map === 'number') {
+                                    if (nodes[path] !== void 0 && nodes[path].length >= map) {
+                                        res = addition.nodeList.create(nodes[path].slice(0, map));
+                                        nodes[path].splice(0, map);
+                                    }
+                                }
+                                return res;
+                            };
+                            var cache   = {},
+                                nodes   = dom.nodes(),
+                                map     = mapping.get(consts.maps.DOM);
+                            return getMap(map, '');
+                        },
+                        indexes : function () {
+                            function process(model, indexes, parent) {
+                                if (helpers.isArray(model)) {
+                                    model.forEach(function (model, index) {
+                                        process(model, indexes.concat([index]), parent);
+                                    });
+                                } else if (model instanceof Object) {
+                                    _object(model).forEach(function (prop, val) {
+                                        if (val instanceof addition.nodeList.NODE_LIST) {
+                                            val.setIndexes(indexes);
+                                            if (parent !== null) {
+                                                parent[prop] === void 0 && (parent[prop] = addition.nodeList.create());
+                                                parent[prop].add(val);
+                                            }
+                                        } else if (helpers.isArray(val)) {
+                                            process(val, indexes, val);
                                         }
+                                    });
+                                }
+                            };
+                            if (helpers.isArray(privates.map.model)) {
+                                process(privates.map.model, [], null);
+                            }
+                        }
+                    };
+                    html        = {
+                        cache       : {
+                            load    : function (parent, conditions) {
+                                var cache       = privates.cache.html,
+                                    conditions  = conditions instanceof Object ? conditions : false,
+                                    _cache      = {},
+                                    _names      = {},
+                                    insts       = {};
+                                if (helpers.isArray(privates.hooks)) {
+                                    privates.hooks.forEach(function (_hooks) {
+                                        _object(_hooks).forEach(function (name, value) {
+                                            var _name   = null,
+                                                path    = null,
+                                                ref     = null;
+                                            if (value instanceof settings.classes.CALLER) {
+                                                _name       = settings.other.SUBLEVEL_BEGIN + name + settings.other.SUBLEVEL_END;
+                                                path        = (parent === false ? '' : parent + '.') + _name;
+                                                ref         = path + value.url;
+                                                _cache[ref] = _cache[ref] !== void 0 ? _cache[ref] : { url: value.url, hooks: [], path: path };
+                                                if (helpers.isArray(value.hooks)) {
+                                                    _cache[ref].hooks = _cache[ref].hooks.concat(value.hooks.getOriginal());
+                                                } else {
+                                                    _cache[ref].hooks.push(value.hooks);
+                                                }
+                                            }
+                                        });
+                                    });
+                                    _object(_cache).forEach(function (ref, data) {
+                                        var html = Pattern.instance({
+                                                id      : flex.unique(),
+                                                url     : data.url,
+                                                hooks   : data.hooks
+                                            });
+                                        html        = html.html(data.path, conditions);
+                                        cache[ref]  = {
+                                            hooks       : data.hooks,
+                                            html        : html.html,
+                                            fragments   : html.fragments,
+                                            parent      : data.path,
+                                            cursor      : 0,
+                                        };
+                                    });
+                                    return cache;
+                                }
+                            },
+                        },
+                        getHTML     : function (parent, name, inst, index){
+                            var html    = false,
+                                cached  = null,
+                                ref     = null,
+                                _ref    = (parent === false ? '' : parent + '.') + settings.other.SUBLEVEL_BEGIN + name + settings.other.SUBLEVEL_END;
+                            if (inst instanceof settings.classes.CALLER) {
+                                ref     = _ref + inst.url;
+                                if (privates.cache.html[ref] !== void 0) {
+                                    cached  = privates.cache.html[ref];
+                                    html    = {
+                                        html        : '<!--' + settings.other.ANCHOR + _ref + '-->' + cached.fragments.slice(cached.cursor, cached.cursor + inst.hooks.length).join(''),
+                                        fragments   : null,
+                                        original    : cached.original
+                                    };
+                                    cached.cursor   += inst.hooks.length;
+                                }
+                            }
+                            return html;
+                        },
+                        build       : function (parent, conditions) {
+                            var parent      = typeof parent === 'string' ? parent : false,
+                                conditions  = conditions instanceof Object ? conditions : false,
+                                res         = '',
+                                original    = self.source.html(parent),
+                                regs        = settings.regs,
+                                _cache      = cache.reset().regs,
+                                fragments   = [];
+                            if (helpers.isArray(privates.hooks)) {
+                                html.cache.load(parent, conditions);
+                                privates.hooks.forEach(function (_hooks, index) {
+                                    var fragment = original;
+                                    _object(_hooks).forEach(function (name, value) {
+                                        var _name   = (!parent ? '' : parent + '.') + name,
+                                            _res    = html.getHTML(parent, name, value, index);
+                                        _cache[_name]   = _cache[_name] === void 0 ? new RegExp(regs.HOOK_OPEN + _name.replace(/\./gi,'\\.') + regs.HOOK_CLOSE, 'gi') : _cache[_name];
+                                        fragment        = _res !== false ? fragment.replace(_cache[_name], _res.html) : fragment;
+                                        fragment        = _res !== false ? fragment : hooks.insert(_name, value, fragment);
+                                    });
+                                    fragment    = condition.html(fragment, condition.getByPath(!parent ? '' : parent, conditions), _hooks, parent);
+                                    res         += fragment;
+                                    fragments.push(fragment);
+                                });
+                            }
+                            privates.html = res !== '' ? res : original;
+                            return fragments.length === 0 ? [original] : fragments;
+                        },
+                        wrap        : function () {
+                            privates.wrapper            = helpers.getPattern(privates.html);
+                            privates.wrapper.innerHTML  = privates.html;
+                        },
+                        map         : function (){
+                            function procces(hooks, path, name, dest) {
+                                var _name   = '',
+                                    source  = null;
+                                if (hooks instanceof settings.classes.CALLER) {
+                                    _name = settings.other.SUBLEVEL_BEGIN + name + settings.other.SUBLEVEL_END;
+                                    if (dest[_name] === void 0) {
+                                        source      = Source.storage.get(hooks.url);
+                                        path        = (path === '' ? '' : path + '.') + _name;
+                                        dest.inc    = dest.inc === void 0 ? [] : dest.inc;
+                                        dest[_name] = {
+                                            url     : hooks.url,
+                                            html    : source.html(path),
+                                        };
+                                        dest.inc.push(_name);
+                                        procces(hooks.hooks, path, name, dest[_name]);
+                                    }
+                                } else if (helpers.isArray(hooks)) {
+                                    hooks.forEach(function (hooks) {
+                                        procces(hooks, path, name, dest);
+                                    });
+                                } else if (hooks instanceof Object) {
+                                    _object(hooks).forEach(function (name, hooks) {
+                                        procces(hooks, path, name, dest);
+                                    });
+                                }
+                            };
+                            privates.map.html = {
+                                url : self.url,
+                                html: self.source.html(''),
+                            };
+                            procces(privates.hooks, '', '', privates.map.html);
+                        },
+                    };
+                    hooks       = {
+                        cache   : {},
+                        getValue: function (name, value) {
+                            var res = '';
+                            if (value instanceof settings.classes.CALLER) {
+                                res = hooks.convert(value.hooks);
+                            } else if (typeof value === 'function'){
+                                res = hooks.getValue(name, value());
+                            } else if (typeof value === 'string') {
+                                res = value;
+                            } else if (typeof value === 'object') {
+                                res = {};
+                                _object(value).forEach(function (name, val) {
+                                    res[name] = hooks.getValue(name, val);
+                                });
+                            } else if (typeof value.toString === 'function') {
+                                res = value.toString();
+                            } else {
+                                flex.logs.log(signature() + logs.pattern.CANNOT_DETECT_HOOK_VALUE + '. Hook name: (' + name + ')', flex.logs.types.WARNING);
+                                res = '';
+                            }
+                            return res;
+                        },
+                        convert : function (source_hooks) {
+                            var result = [];
+                            if (helpers.isArray(source_hooks)) {
+                                source_hooks.forEach(function (_hooks) {
+                                    var res = {};
+                                    _object(_hooks).forEach(function (name, value) {
+                                        res[name] = hooks.getValue(name, value);
+                                    });
+                                    result.push(res);
+                                });
+                            }
+                            return result;
+                        },
+                        insert  : function (name, value, fragment) {
+                            function getProps(parent, obj, props) {
+                                var props = props !== void 0 ? props : {};
+                                _object(obj).forEach(function (name, value) {
+                                    if (!(value instanceof settings.classes.CALLER) && typeof value === 'object') {
+                                        getProps(parent + '.' + name, value, props);
+                                    } else {
+                                        props[parent + '.' + name] = value;
                                     }
                                 });
-                                handles.forEach(function (handle) {
-                                    handle();
+                                return props;
+                            };
+                            var cache = privates.cache.regs;
+                            if (typeof value === 'object') {
+                                _object(getProps(name, value)).forEach(function (name, value) {
+                                    fragment = hooks.insert(name, value, fragment);
                                 });
+                                return fragment;
+                            } else {
+                                cache[name] = cache[name] === void 0 ? new RegExp(settings.regs.HOOK_OPEN + name + settings.regs.HOOK_CLOSE, 'gi') : cache[name];
+                                return fragment.replace(cache[name], hooks.getValue(name, value));
+                                //return fragment.replace(cache[name], '<!--BEGIN-->' + hooks.getValue(name, value) + '<!--END-->');
+                            }
+                        },
+                        anchors : {
+                            html    : function () {
+                                function getRef(ref) {
+                                    var parts   = ref.split('.'),
+                                        _ref    = '';
+                                    parts.forEach(function (part, index) {
+                                        if (index === parts.length - 1) {
+                                            _ref += (_ref !== '' ? '.' : '') + settings.other.SUBLEVEL_BEGIN + part + settings.other.SUBLEVEL_END;
+                                        } else {
+                                            _ref += (_ref !== '' ? '.' : '') + part;
+                                        }
+                                    });
+                                    return _ref;
+                                };
+                                var matchs  = privates.html.match(settings.regs.HOOK),
+                                    regs    = settings.regs,
+                                    cache   = {},
+                                    refs    = {};
+                                if (matchs instanceof Array) {
+                                    matchs.forEach(function (hook) {
+                                        var ref = hook.replace(settings.regs.HOOK_BORDERS, ''),
+                                            reg = cache[ref] !== void 0 ? cache[ref] : new RegExp(regs.HOOK_OPEN + ref.replace(/\./gi, '\\.') + regs.HOOK_CLOSE, 'gi');
+                                        cache[ref]  = reg;
+                                        ref         = refs[ref] === void 0 ? getRef(ref) : refs[ref];
+                                        refs[ref]   = ref;
+                                        privates.html = privates.html.replace(reg, '<!--' + settings.other.ANCHOR + ref + '-->');
+                                    });
+                                }
+                            },
+                            convert : function () {
+                                var treeWalker = document.createTreeWalker(
+                                        privates.wrapper,
+                                        NodeFilter.SHOW_COMMENT,
+                                        { acceptNode: function (node) { return ~(node.nodeValue.indexOf(settings.other.ANCHOR)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT; } },
+                                        false
+                                    ),
+                                    nodeList    = [],
+                                    anchors     = {};
+                                while (treeWalker.nextNode()) {
+                                    nodeList.push(treeWalker.currentNode);
+                                }
+                                nodeList.forEach(function (node) {
+                                    var anchor  = document.createTextNode(''),
+                                        ref     = node.nodeValue.replace(settings.other.ANCHOR, '');
+                                    anchors[ref] === void 0 && (anchors[ref] = []);
+                                    anchors[ref].push(anchor);
+                                    node.parentNode.insertBefore(anchor, node);
+                                    node.parentNode.removeChild(node);
+                                });
+                                privates.map.anchors = anchors;
+                            },
+                            get     : function (path) {
+                                var anchor = null;
+                                if (privates.map.anchors !== null) {
+                                    if (privates.map.anchors[path] instanceof Array && privates.map.anchors[path].length > 0) {
+                                        anchor = privates.map.anchors[path][0];
+                                        privates.map.anchors[path].splice(0, 1);
+                                    }
+                                }
+                                return anchor;
+                            }
+                        },
+                    };
+                    condition   = {
+                        find        : function () {
+                            function proccess(_conditions, hooks) {
+                                if (helpers.isArray(hooks)) {
+                                    hooks.forEach(function (hooks) {
+                                        proccess(_conditions, hooks);
+                                    });
+                                } else if (typeof hooks === 'object') {
+                                    _object(hooks).forEach(function (prop, val) {
+                                        var _prop = null,
+                                            _cond = null;
+                                        if (val instanceof settings.classes.CALLER) {
+                                            if (_urls[val.url] === void 0) {
+                                                _prop               = settings.other.SUBLEVEL_BEGIN + prop + settings.other.SUBLEVEL_END;
+                                                _cond               = _object(val.conditions).copy();
+                                                _cond               = Object.keys(_cond).length === 0 ? conditions.storage.get(val.url) : _cond;
+                                                _conditions[_prop]  = _cond !== null ? _cond : {};
+                                                proccess(_conditions[_prop], val.hooks);
+                                            }
+                                        } else if (typeof val === 'object') {
+                                            _conditions[prop] = {};
+                                            proccess(_conditions[prop], val);
+                                        }
+                                    });
+                                }
+                            };
+                            var _urls = {};
+                            if (Object.keys(privates.conditions).length === 0) {
+                                privates.conditions = conditions.storage.get(self.url);
+                                privates.conditions = privates.conditions === null ? {} : privates.conditions;
+                            }
+                            proccess(privates.conditions, privates.hooks);
+                            return privates.conditions;
+                        },
+                        html        : function (fragment, conditions, hooks, parent){
+                            var source  = null,
+                                res     = null,
+                                path    = parent !== false ? parent + '.' : '',
+                                cache   = null,
+                                map     = null,
+                                refs    = '';
+                            privates.cache.html_conds   = privates.cache.html_conds === void 0 ? { regs : {}, matches : {}, removed: {}} : privates.cache.html_conds;
+                            cache                       = privates.cache.html_conds;
+                            if (conditions !== false) {
+                                source = Source.storage.get(self.url);
+                                if (source !== null && source.flags().has_conditions && !source.flags().has_model) {
+                                    map = source.map().conditions;
+                                    _object(conditions).forEach(function (prop, val) {
+                                        var res     = null,
+                                            ref     = null,
+                                            match   = null;
+                                        if (val instanceof Function) {
+                                            res                 = val(hooks);
+                                            ref                 = path + prop + '=' + res;
+                                            match               = null;
+                                            cache.regs[ref]     = cache.regs[ref] !== void 0 ? cache.regs[ref] : new RegExp(settings.regs.CONDITION_CONTENT.replace('[open]', ref.replace('.', '\\.')).
+                                                                                                                                                            replace('[close]', (path + prop).replace('.', '\\.')), 'gi');
+                                            match = fragment.match(cache.regs[ref]);
+                                            if (match instanceof Array && match.length > 0) {
+                                                match.forEach(function (match) {
+                                                    fragment = fragment.replace(match, match.replace('<!--' + ref + '-->', '').replace('<!--' + path + prop + '-->', ''));
+                                                });
+                                            }
+                                            cache.regs[prop] = cache.regs[prop] !== void 0 ? cache.regs[prop] : new RegExp(settings.regs.CONDITION_CONTENT_ANY. replace('[open]', (path + prop).replace('.', '\\.')).
+                                                                                                                                                                replace('[close]', (path + prop).replace('.', '\\.')), 'gi');
+                                            fragment    = fragment.replace(cache.regs[prop], '');
+                                            refs        += refs === '' ? path + prop : '|' + path + prop;
+                                        }
+                                    });
+                                    cache.regs[refs]    = cache.regs[refs] !== void 0 ? cache.regs[refs] : new RegExp(settings.css.attrs.CONDITION + '=".*?(' + refs + ').*?"', 'gi');
+                                    fragment            = fragment.replace(cache.regs[refs], '');
+                                } else {
+                                    _object(conditions).forEach(function (prop, val) {
+                                        var ref     = path + prop,
+                                            open    = 'OPEN-' + ref,
+                                            close   = 'CLOSE-' + ref;
+                                        cache.removed[open]     = cache.removed[open]   !== void 0 ? cache.removed[open]    : new RegExp('<\\!--' + ref.replace('.', '\\.') + '=.{1,}' + '-->', 'gi');
+                                        cache.removed[close]    = cache.removed[close]  !== void 0 ? cache.removed[close]   : new RegExp('<\\!--' + ref.replace('.', '\\.') + '-->', 'gi');
+                                        fragment = fragment.replace(cache.removed[open], '');
+                                        fragment = fragment.replace(cache.removed[close], '');
+                                    });
+                                }
+                            }
+                            return fragment;
+                        },
+                        getByPath   : function (path, conditions){
+                            var parts   = path.split('.'),
+                                dest    = conditions !== void 0 ? (conditions !== false ? conditions : privates.conditions) : privates.conditions,
+                                cache   = privates.cache.conditions;
+                            if (path !== '' && cache[path] === void 0) {
+                                parts.forEach(function (part) {
+                                    if (dest !== null && dest[part] !== void 0 && typeof dest === 'object') {
+                                        dest = dest[part];
+                                    } else {
+                                        dest = null;
+                                    }
+                                });
+                                cache[path] = dest !== null ? (Object.keys(dest).length > 0 ? dest : null) : dest;
+                            }
+                            return path !== '' ? cache[path] : dest;
+                        },
+                        apply       : function () {
+                            function addAnchors() {
+                                if (!anchored) {
+                                    Array.prototype.forEach.call(list, function (node, index) {
+                                        var anchor = document.createTextNode('');
+                                        node.parentNode.insertBefore(anchor, node);
+                                        node.__anchor = anchor;
+                                    });
+                                    anchored = true;
+                                }
+                            };
+                            function proccess(hooks, path, model, count) {
+                                function instance(hooks, model, funcs, conds) {
+                                    var Instance = function (hooks, model, funcs, conds) {
+                                        this.hooks  = hooks;
+                                        this.model  = model;
+                                        this.funcs  = funcs;
+                                        this.conds  = conds;
+                                    };
+                                    Instance.prototype = {
+                                        getter  : function () {
+                                            var self = this,
+                                                data = {};
+                                            _object(this.hooks).forEach(function (prop, val) {
+                                                data[prop] = self.model[prop] !== void 0 ? self.model[prop] : val;
+                                            });
+                                            return data;
+                                        },
+                                        results : function (_prop, _val){
+                                            var res     = {},
+                                                data    = this.getter();
+                                            if (_prop !== void 0) {
+                                                data[_prop] = _val;
+                                            }
+                                            _object(funcs).forEach(function (prop, val) {
+                                                res[prop] = val(data);
+                                            });
+                                            return res;
+                                        },
+                                        update  : function (_prop, _val) {
+                                            var res = this.results(_prop, _val);
+                                            _object(this.conds).forEach(function (prop, val) {
+                                                var visible = true;
+                                                val.conds.forEach(function (con) {
+                                                    visible = !visible ? visible : (res[con.con] === con.val);
+                                                });
+                                                if (!visible) {
+                                                    val.nodes.forEach(function (node) {
+                                                        node.parentNode !== null && node.parentNode.removeChild(node);
+                                                    });
+                                                } else {
+                                                    val.nodes.forEach(function (node) {
+                                                        node.__anchor !== void 0 && node.__anchor.parentNode.insertBefore(node, node.__anchor);
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    };
+                                    return new Instance(hooks, model, funcs, conds);
+                                };
+                                function bind(inst) {
+                                    _object(model).forEach(function (prop, val) {
+                                        if (typeof val !== 'object' && model[settings.other.BIND_PREFIX + prop] !== void 0) {
+                                            model[settings.other.BIND_PREFIX + prop].bind(function (current, previous) {
+                                                inst.update(prop, current);
+                                            });
+                                        }
+                                    });
+                                };
+                                var _conds  = {},
+                                    funcs   = {},
+                                    res     = {},
+                                    inst    = [];
+                                if (helpers.isArray(hooks)) {
+                                    hooks.forEach(function (_hooks, index) {
+                                        proccess(_hooks, path, model !== null ? (model[index] !== void 0 ? model[index] : null) : null, hooks.length);
+                                    });
+                                } else if (typeof hooks === 'object'){
+                                    _object(conds).forEach(function (prop, val) {
+                                        var _count = null;
+                                        if (val.path === path) {
+                                            _count          = counts[prop] === void 0 ? nodes[prop].length / count : counts[prop];
+                                            counts[prop]    = _count;
+                                            if (nodes[prop].length >= _count) {
+                                                _conds[prop] = {
+                                                    conds: val.conditions,
+                                                    nodes: nodes[prop].slice(0, _count)
+                                                };
+                                                nodes[prop].splice(0, _count);
+                                            }
+                                        }
+                                    });
+                                    if (Object.keys(_conds).length > 0) {
+                                        funcs = condition.getByPath(path);
+                                        if (funcs !== null) {
+                                            inst = instance(hooks, model, funcs, _conds);
+                                            if (model !== null && Object.keys(model).length > 0) {
+                                                addAnchors();
+                                                bind(inst);
+                                                inst.update();
+                                            } else {
+                                                inst.update();
+                                            }
+                                        }
+                                    }
+                                    _object(hooks).forEach(function (prop, val) {
+                                        var _prop = null;
+                                        if (val instanceof settings.classes.CALLER) {
+                                            _prop = settings.other.SUBLEVEL_BEGIN + prop + settings.other.SUBLEVEL_END;
+                                            proccess(   val.hooks,
+                                                        (path === '' ? '' : path + '.') + _prop,
+                                                        model !== null ? (model[_prop] !== void 0 ? model[_prop] : null) : null,
+                                                        -1);
+                                        } else if (helpers.isArray(val)) {
+                                            hooks.forEach(function (_hooks, index) {
+                                                proccess(_hooks, path, model !== null ? (model[index] !== void 0 ? model[index] : null) : null, -1);
+                                            });
+                                        }
+                                    });
+                                }
+                            };
+                            var list        = _nodes('*[' + settings.css.attrs.CONDITION + ']', false, privates.wrapper).target,
+                                nodes       = null,
+                                conds       = {},
+                                counts      = {},
+                                anchored    = false;
+                            if (list instanceof NodeList) {
+                                Array.prototype.forEach.call(list, function (node, index) {
+                                    var attr    = node.getAttribute(settings.css.attrs.CONDITION);
+                                    conds[attr] = conds[attr] === void 0 ? [] : conds[attr];
+                                    conds[attr].push(node);
+                                    node.removeAttribute(settings.css.attrs.CONDITION);
+                                });
+                                nodes = conds;
+                                conds = {};
+                                _object(nodes).forEach(function (prop, val) {
+                                    var conditions  = prop.split(','),
+                                        path        = conditions[0].split('=')[0];
+                                    conds[prop] = {
+                                        path        : path.indexOf('.') === -1 ? '' : path.replace(/\.[\w\d_]{1,}$/gi, ''),
+                                        conditions  : conditions.map(function (con) {
+                                            con = con.split('=');
+                                            return {
+                                                con: con[0].indexOf('.') === -1 ? con[0] : con[0].replace(/.*[^\w\d]/gi, ''),
+                                                val: con[1]
+                                            };
+                                        })
+                                    };
+                                });
+                                proccess(   privates.hooks,
+                                            '', 
+                                            privates.map.model, 
+                                            helpers.isArray(privates.hooks)? privates.hooks.length : 1);
                             }
                         }
                     };
                     controller  = {
-                        apply       : function (_instance, _resources, _component_url) {
-                            var _controllers = controllers.storage.get(_component_url !== null ? [_component_url, self.url] : self.url);
-                            if (_controllers !== null) {
-                                _controllers.forEach(function (controller) {
-                                    methods.handle(controller, _instance, _resources);
-                                });
+                        init        : function () {
+                            privates.listener = privates.listener === null ? new addition.listener.create(privates.__instance) : privates.listener;
+                        },
+                        events      : function () {
+                            function process(refs, controllers) {
+                                var paths = null;
+                                if (typeof refs === 'object' && refs !== null) {
+                                    controllers.push({
+                                        path        : refs.path,
+                                        controller  : refs.controller
+                                    });
+                                    if (refs.events instanceof Array && refs.events.length > 0) {
+                                        paths = controllers.map(function (ref) {
+                                            return ref.path;
+                                        });
+                                        paths = paths.reverse();
+                                        refs.events.forEach(function (event) {
+                                            controllers.forEach(function (contr, index) {
+                                                var path    = paths[index] + (paths[index] !== '' ? '.' : '') + event.handle,
+                                                    handle  = null;
+                                                if (contr.controller !== null && typeof contr.controller === 'object') {
+                                                    handle = _object(contr.controller).getByPath(path);
+                                                    if (doms[event.id] !== void 0) {
+                                                        if (handle instanceof Function) {
+                                                            doms[event.id].forEach(function (item) {
+                                                                if (~paths.indexOf(item.path)) {
+                                                                    handle = handle.bind(contr.controller);
+                                                                    item.nodeList.on(event.event, handle);
+                                                                }
+                                                            });
+                                                        } else if (handle instanceof Array && handle.length === doms[event.id].length) {
+                                                            doms[event.id].forEach(function (item, index) {
+                                                                if (~paths.indexOf(item.path) && handle[index] instanceof Function) {
+                                                                    handle[index] = handle[index].bind(contr.controller);
+                                                                    item.nodeList.on(event.event, handle[index]);
+                                                                }
+                                                            });
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                        });
+                                    }
+                                    if (refs.hooks !== void 0 && typeof refs.hooks === 'object') {
+                                        _object(refs.hooks).forEach(function (prop, val) {
+                                            process(val, controllers.filter(function () { return true;}));
+                                        });
+                                    }
+                                }
+                            };
+                            var refs = privates.map.refs,
+                                doms = privates.cache.dom;
+                            process(refs, []);
+                        },
+                        apply       : function (update) {
+                            function process(hooks, model, _controller, exchange) {
+                                if (hooks instanceof settings.classes.CALLER) {
+                                    _controller = hooks.controller !== null ? hooks.controller : controllers.storage.get(hooks.url);
+                                    process(hooks.hooks, model, _controller, hooks.exchange !== null ? hooks.exchange : exchange);
+                                } else if (helpers.isArray(hooks)) {
+                                    hooks.forEach(function (hooks, index) {
+                                        if (hooks instanceof settings.classes.CALLER || hooks instanceof Object || helpers.isArray(hooks)) {
+                                            process(hooks,
+                                                    model !== null ? (model[index] !== void 0 ? model[index] : null) : null,
+                                                    _controller,
+                                                    exchange);
+                                        }
+                                    });
+                                } else if (hooks instanceof Object && !helpers.isArray(hooks)) {
+                                    if (_controller !== null) {
+                                        controller.handle(_controller, model, exchange, update);
+                                    }
+                                    _object(hooks).forEach(function (name, hooks) {
+                                        var ref = name;
+                                        if (hooks instanceof settings.classes.CALLER) {
+                                            ref = settings.other.SUBLEVEL_BEGIN + name + settings.other.SUBLEVEL_END;
+                                        }
+                                        if (hooks instanceof settings.classes.CALLER || hooks instanceof Object || helpers.isArray(hooks)) {
+                                            process(hooks,
+                                                    model !== null ? (model[ref] !== void 0 ? model[ref] : null) : null,
+                                                    null,
+                                                    exchange);
+                                        }
+                                    });
+                                }
                             }
+                            process(privates.hooks,
+                                    privates.map.model,
+                                    privates.caller.controller  === null ? controllers.storage.get(self.url)    : privates.caller.controller,
+                                    privates.caller.exchange    === null ? null                                 : privates.caller.exchange);
+                        },
+                        handle      : function (handle, model, exchange, update) {
+                            function call(handle, _this) {
+                                var _this = _this !== void 0 ? _this : privates.__instance;
+                                handle.call(_this, {
+                                    model   : model,
+                                    listener: privates.listener,
+                                    exchange: exchange,
+                                    instance: privates.__instance
+                                });
+                            };
+                            var update = typeof update === 'boolean' ? update : false;
+                            if (handle instanceof Function) {
+                                call(handle);
+                            } else if (handle instanceof Object) {
+                                if (update) {
+                                    handle[settings.events.ONUPDATE] instanceof Function && call(handle[settings.events.ONUPDATE], handle);
+                                } else {
+                                    handle[settings.events.ONREADY] instanceof Function && call(handle[settings.events.ONREADY], handle);
+                                }
+                                if (handle[settings.events.SETINSTNCE] instanceof Function) {
+                                    call(handle[settings.events.SETINSTNCE], handle)
+                                } else {
+                                    handle.model    = model;
+                                    handle.listener = privates.listener;
+                                    handle.exchange = exchange;
+                                    handle.instance = privates.__instance;
+                                }
+                            }
+                        }
+                    };
+                    cache       = {
+                        reset   : function () {
+                            privates.cache = {
+                                regs        : {},
+                                conditions  : {},
+                                html        : {},
+                                dom         : {}
+                            };
+                            return privates.cache;
                         },
                     };
                     methods     = {
-                        build       : function (_hooks, _resources, _conditions, _component_url) {
-                            var nodes           = [],
-                                _map            = [],
-                                _binds          = [],
-                                clone           = null,
-                                hooks_map       = null,
-                                _instance       = null,
-                                _conditions     = condition.setDefault(_conditions);
-                            if (_hooks !== null) {
-                                map.        reset();
-                                model.      reset();
-                                dom.        reset();
-                                _hooks      = hooks.build(_hooks);
-                                hooks_map   = cloning.update(_hooks, _conditions);
-                                _hooks      = _hooks instanceof Array ? _hooks : [_hooks];
-                                _hooks.forEach(function (_hooks) {
-                                    var conditions_dom = null;
-                                    clone           = privates.pattern(condition.get(_hooks, _conditions), _conditions);
-                                    map.        iteration();
-                                    model.      iteration();
-                                    dom.        iteration();
-                                    hooks.      apply(_hooks, clone.setters, hooks_map);
-                                    map.        update(clone.clone);
-                                    model.      update(clone.clone, model.getDefaults(_hooks, clone.setters));
-                                    model.      clear(clone.clone);
-                                    dom.        update(clone.dom);
-                                    conditions_dom  = clone.applyConditions();
-                                    nodes           = nodes.concat(Array.prototype.filter.call(clone.clone.childNodes, function () { return true; }));
-                                    condition.tracking(_conditions, conditions_dom, _hooks);
-                                });
-                            }
-                            _instance = result.instance({
-                                url             : self.url,
-                                nodes           : nodes,
-                                map             : map.map,
-                                model           : model.model,
-                                binds           : model.binds,
-                                dom             : dom.dom,
-                                hooks_map       : hooks_map,
-                                instance        : privates.__instance,
-                                handle          : function (handle, _resources) { return methods.handle(handle, _instance, _resources); }
-                            });
-                            controller.apply(_instance, _resources, _component_url);
-                            return _instance;
+                        make    : function (update){
+                            var update = typeof update === 'boolean' ? update : false;
+                            html.build(false, privates.conditions);
+                            hooks.anchors.html();
+                            html.wrap();
+                            hooks.anchors.convert();
+                            model.bind();
+                            model.combine();
+                            model.finalize();
+                            dom.indexes();
+                            condition.apply();
+                            controller.init();
+                            controller.apply(update);
+                            controller.events();
+                            html.map();
                         },
-                        handle      : function (handle, _instance, _resources) {
-                            if (typeof handle === 'function') {
-                                handle.call(_instance, {
-                                    model       : model.model,
-                                    binds       : model.binds,
-                                    map         : map.collapse(),
-                                    dom         : dom.collapse(),
-                                    resources   : _resources,
-                                });
-                            }
-                        },
-                        bind        : function (hooks, resources, conditions, component_url) {
-                            return function () {
-                                return methods.build(hooks, resources, conditions, component_url);
+                        build   : function () {
+                            cache.reset();
+                            condition.find();
+                            mapping.refs();
+                            methods.make(false);
+                            controller.handle(privates.caller.onReady, privates.map.model, privates.caller.exchange);
+                            return {
+                                nodes   : privates.wrapper.children,
+                                model   : privates.map.model,
                             };
-                        }
+                        },
+                        update  : function (hooks){
+                            function getHooks(src, org, refs){
+                                var _hooks = [];
+                                if (helpers.isArray(src) && helpers.isArray(org)) {
+                                    if (src.length !== org.length) {
+                                        org = null;
+                                    }
+                                } else {
+                                    org = null;
+                                }
+                                src.forEach(function (hooks, index) {
+                                    var item = {};
+                                    if (hooks instanceof Object) {
+                                        _object(hooks).forEach(function (prop, val) {
+                                            if (refs.hooks[prop] !== void 0) {
+                                                item[prop] = Caller.instance({
+                                                    url     : refs.hooks[prop].url,
+                                                    hooks   : getHooks(val instanceof Array ? val : [val], org !== null ? (org[index][prop] instanceof settings.classes.CALLER ? org[index][prop].hooks : null) : null, refs.hooks[prop])
+                                                });
+                                            } else {
+                                                item[prop] = val;
+                                            }
+                                        });
+                                        org !== null && (_object(org[index]).forEach(function (prop, val) {
+                                            item[prop] === void 0 && (item[prop] = val);
+                                        }));
+                                        _hooks.push(item);
+                                    }
+                                });
+                                return _hooks;
+                            };
+                            var hooks   = helpers.isArray(hooks) ? hooks : [hooks],
+                                _hooks  = null;
+                            if (privates.map.refs !== null) {
+                                _hooks          = getHooks(hooks, privates.hooks, privates.map.refs);
+                                privates.hooks  = _hooks;
+                                privates.caller.unmount();
+                                methods.make(true);
+                                controller.handle(privates.caller.onUpdate, privates.map.model, privates.caller.exchange);
+                                privates.caller.mount(privates.wrapper.children);
+                            }
+                        },
+                        html    : function (parent, conditions) {
+                            var fragments = html.build(parent, conditions);
+                            return {
+                                html        : privates.html,
+                                fragments   : fragments,
+                            };
+                        },
+                    };
+                    signature   = function () {
+                        return logs.SIGNATURE + ':: pattern (' + self.url + ')';
                     };
                     returning   = {
-                        build       : methods.build,
-                        handle      : methods.handle,
-                        controllers : {
-                            apply   : controller.apply
-                        },
-                        bind        : methods.bind,
-                        clone       : cloning.clone
+                        build   : methods.build,
+                        html    : methods.html,
+                        update  : methods.update
                     };
                     return {
-                        build       : returning.build,
-                        handle      : returning.handle,
-                        controllers : {
-                            apply   : returning.controllers.apply
-                        },
-                        bind        : returning.bind,
-                        clone       : returning.clone
+                        build   : returning.build,
+                        html    : returning.html,
+                        update  : returning.update,
                     };
                 },
                 instance: function (parameters) {
-                    if (flex.oop.objects.validate(parameters, [ { name: 'url',                  type: 'string'      },
-                                                                { name: 'pattern',              type: 'function'    }]) !== false) {
+                    if (flex.oop.objects.validate(parameters, [ { name: 'url',                  type: 'string'                                                          },
+                                                                { name: 'conditions',           type: 'object',                                     value: {}           },
+                                                                { name: 'caller',               type: 'object',                                     value: null         },
+                                                                { name: 'hooks',                type: ['object', 'array'],                          value: null         }]) !== false) {
                         return _object({
-                            parent          : settings.classes.INSTANCE,
+                            parent          : settings.classes.PATTERN,
                             constr          : function () {
+                                this.id     = flex.unique();
                                 this.url    = flex.system.url.restore(parameters.url);
+                                this.source = Source.storage.get(parameters.url);
+                                if (this.source === null) {
+                                    flex.logs.log(logs.pattern.CANNOT_FIND_SOURCE_OF_TEMPLATE + ': ' + this.url, flex.logs.types.CRITICAL);
+                                    throw new Error(logs.pattern.CANNOT_FIND_SOURCE_OF_TEMPLATE + ': ' + this.url);
+                                }
                             },
                             privates        : {
-                                //From parameters
-                                pattern         : parameters.pattern,
+                                caller      : parameters.caller,
+                                hooks       : parameters.hooks,
+                                conditions  : parameters.conditions,
+                                html        : null,
+                                wrapper     : null,
+                                map         : {
+                                    model   : null,
+                                    html    : null,
+                                    hooks   : null,
+                                    refs    : null,
+                                    anchors : null,
+                                },
+                                listener    : null,
+                                model       : null,
+                                cache       : {
+                                    html    : null,
+                                    regs    : null
+                                }
                             },
-                            prototype       : instance.proto
+                            prototype       : Pattern.proto
                         }).createInstanceClass();
                     } else {
                         return null;
                     }
-                },
-                storage : {
-                    add: function (url, instance) {
-                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PATTERNS, {});
-                        if (storage[url] === void 0) {
-                            storage[url] = instance;
+                }
+            };
+            //BEGIN: caller class ===============================================
+            Caller          = {
+                proto   : function (privates){
+                    var self        = this,
+                        render      = null,
+                        build       = null,
+                        patterns    = null,
+                        mount       = null,
+                        unmount     = null,
+                        signature   = null,
+                        returning   = null;
+                    patterns    = {
+                        inHooks    : function (hooks) {
+                            var hooks = hooks === void 0 ? privates.hooks : hooks;
+                            hooks = helpers.isArray(hooks) ? hooks : (hooks !== null ? new ExArray([hooks]) : null);
+                            if (hooks !== null) {
+                                hooks.forEach(function (_hooks) {
+                                    _object(_hooks).forEach(function (hook_name, hook_value) {
+                                        if (hook_value instanceof settings.classes.CALLER) {
+                                            if (privates.patterns.indexOf(hook_value.url) === -1) {
+                                                privates.patterns.push(hook_value.url);
+                                                patterns.inHooks(hook_value.hooks);
+                                            }
+                                        }
+                                    });
+                                });
+                            }
+                            privates.patterns.indexOf(self.url) === -1 && privates.patterns.push(self.url);
+                        },
+                        inMap   : function (map) {
+                            var map = map === void 0 ? privates.map : map;
+                            if (map !== null && map instanceof Object) {
+                                _object(map).forEach(function (prop, val) {
+                                    var url = null;
+                                    if (val !== null && val instanceof Object) {
+                                        url = val.url !== void 0 ? flex.system.url.restore(val.url) : null;
+                                        val.url     !== void 0 && (!~privates.patterns.indexOf(url) && privates.patterns.push(url));
+                                        val.hooks   !== void 0 && patterns.inMap(val.hooks);
+                                    }
+                                });
+                            }
+                        },
+                    };
+                    mount       = function (nodes) {
+                        var nodes   = nodes === void 0 ? privates.pattern.nodes : nodes,
+                            context = [];
+                        privates.mounted = Array.prototype.filter.call(nodes, function () { return true; });
+                        if (privates.node !== null) {
+                            Array.prototype.forEach.call(privates.node, function (parent) {
+                                Array.prototype.forEach.call(nodes, function (node) {
+                                    if (!privates.replace) {
+                                        parent.appendChild(node);
+                                    } else {
+                                        parent.parentNode.insertBefore(node, parent);
+                                    }
+                                });
+                                if (privates.replace) {
+                                    parent.parentNode.removeChild(parent);
+                                }
+                                !~context.indexOf(parent.parentNode) && context.push(parent.parentNode);
+                            });
+                        } else if (privates.before !== null && privates.before.parentNode !== void 0 && privates.before.parentNode !== null) {
+                            Array.prototype.forEach.call(privates.before, function (parent) {
+                                Array.prototype.forEach.call(nodes, function (node) {
+                                    parent.parentNode.insertBefore(node, privates.before);
+                                });
+                                !~context.indexOf(parent.parentNode) && context.push(parent.parentNode);
+                            });
+                        } else if (privates.after !== null && privates.after.parentNode !== void 0 && privates.after.parentNode !== null) {
+                            Array.prototype.forEach.call(privates.after, function (parent) {
+                                var _before = parent.nextSibling !== void 0 ? parent.nextSibling : null;
+                                if (_before !== null) {
+                                    Array.prototype.forEach.call(nodes, function (node) {
+                                        _before.parentNode.insertBefore(node, _before);
+                                    });
+                                } else {
+                                    Array.prototype.forEach.call(nodes, function (node) {
+                                        parent.parentNode.appendChild(node);
+                                    });
+                                }
+                                !~context.indexOf(parent.parentNode) && context.push(parent.parentNode);
+                            });
                         }
-                    },
-                    get: function (url) {
-                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PATTERNS, {});
-                        return storage[url] !== void 0 ? storage[url] : null;
-                    },
+                        if (mount.ui_created === void 0) {
+                            mount.ui_created = true;
+                            flex.oop.namespace.get('flex.libraries.ui.window.move'      ) !== null && flex.libraries.ui.window.move.    create();
+                            flex.oop.namespace.get('flex.libraries.ui.window.focus'     ) !== null && flex.libraries.ui.window.focus.   create();
+                            flex.oop.namespace.get('flex.libraries.ui.window.resize'    ) !== null && flex.libraries.ui.window.resize.  create();
+                            flex.oop.namespace.get('flex.libraries.ui.window.maximize'  ) !== null && flex.libraries.ui.window.maximize.create();
+                        }
+                        flex.events.core.fire(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, context);
+                    };
+                    unmount     = function () {
+                        var parent = null;
+                        if (privates.mounted instanceof Array && privates.mounted.length > 0) {
+                            parent = privates.mounted[0].parentNode !== void 0 ? (privates.mounted[0].parentNode !== null ? privates.mounted[0].parentNode : null) : null;
+                            if (parent !== null) {
+                                privates.mounted.forEach(function (node) {
+                                    parent.removeChild(node);
+                                });
+                            }
+                        }
+                    };
+                    render      = function () {
+                        function makeComponentCaller(map) {
+                            function getHooks(map, hooks) {
+                                function obj(map, hooks) {
+                                    var _hooks = {};
+                                    _object(hooks).forEach(function (prop, val) {
+                                        if (map.hooks[prop] !== void 0) {
+                                            _hooks[prop] = Caller.instance({
+                                                url     : map.hooks[prop].src,
+                                                hooks   : getHooks(map.hooks[prop], val)
+                                            });
+                                        } else {
+                                            _hooks[prop] = val;
+                                        }
+                                    });
+                                    return _hooks;
+                                };
+                                if (helpers.isArray(hooks)) {
+                                    return hooks.map(function (hooks) {
+                                        return obj(map, hooks);
+                                    });
+                                } else {
+                                    return obj(map, hooks);
+                                }
+                            };
+                            var caller      = null,
+                                _map        = _object(map).copy(),
+                                params      = {
+                                    id                  : privates.id,
+                                    node                : privates.node,
+                                    before              : privates.before,
+                                    after               : privates.after,
+                                    replace             : privates.replace,
+                                    conditions          : privates.conditions,
+                                    controller          : privates.controller === null ? controllers.storage.get(self.url) : privates.controller,
+                                    onReady             : privates.onReady,
+                                    exchange            : privates.exchange,
+                                    remove_missing_hooks: privates.remove_missing_hooks,
+                                    map                 : privates.map,
+                                };
+                            if (privates.hooks !== null) {
+                                params.url      = map.src;
+                                params.hooks    = getHooks(map, privates.hooks);
+                                caller          = Caller.instance(params);
+                                caller.render();
+                            }
+                            return caller;
+                        };
+                        function correctCallers() {
+                            function check(hooks, map) {
+                                if (helpers.isArray(hooks)) {
+                                    hooks.forEach(function (_hooks) {
+                                        _object(_hooks).forEach(function (name, obj) {
+                                            if (map[name] !== void 0 && !(obj instanceof settings.classes.CALLER)) {
+                                                _hooks[name] = Caller.instance({
+                                                    url     : map[name].url,
+                                                    hooks   : obj
+                                                });
+                                                map[name].hooks !== void 0 && check(_hooks[name].hooks, map[name].hooks);
+                                            } else if (map[name] !== void 0 && map[name].hooks !== void 0 && obj instanceof settings.classes.CALLER) {
+                                                check(obj.hooks, map[name].hooks);
+                                            }
+                                        });
+                                    });
+                                }
+                            };
+                            var map = Object.keys(privates.map).length === 0 ? defaultsmap.storage.get(self.url) : privates.map;
+                            if (map !== null) {
+                                if (privates.hooks !== null) {
+                                    check(privates.hooks, map);
+                                }
+                            }
+                        };
+                        function checkAdditionRefs(callback) {
+                            var map     = Object.keys(privates.map).length === 0 ? defaultsmap.storage.get(self.url) : privates.map,
+                                count   = privates.patterns.length;
+                            patterns.inMap(map);
+                            if (count !== privates.patterns.length) {
+                                Source.init(privates.patterns, callback, onFail);
+                            } else {
+                                callback();
+                            }
+                        };
+                        function onSuccess(sources) {
+                            //Check addition references
+                            checkAdditionRefs(function () {
+                                //Setup default hooks
+                                if (helpers.isArray(privates.hooks)) {
+                                    privates.hooks.forEach(function(hooks, index){
+                                        privates.hooks[index] = defaultshooks.apply(hooks, self.url);
+                                    });
+                                } else {
+                                    privates.hooks = defaultshooks.apply({}, self.url);
+                                    Object.keys(privates.hooks).length > 0  && (privates.hooks = new ExArray([privates.hooks]));
+                                    !helpers.isArray(privates.hooks)        && (privates.hooks = null);
+                                }
+                                if (sources.length === 1 && sources[0].map().component !== null) {
+                                    //This is component
+                                    makeComponentCaller(sources[0].map().component);
+                                } else {
+                                    //Correct callers
+                                    correctCallers();
+                                    //This is pattern
+                                    privates.pattern = Pattern.instance({
+                                        id      : privates.id,
+                                        url     : self.url,
+                                        hooks   : privates.hooks,
+                                        caller  : privates.__instance
+                                    }).build();
+                                    mount();
+                                    return true;
+                                }
+                            });
+                        };
+                        function onFail() {
+                            flex.logs.log(signature() + logs.caller.CANNOT_INIT_PATTERN, flex.logs.types.CRITICAL);
+                            privates.onReady(null, logs.caller.CANNOT_INIT_PATTERN, self.url);
+                            throw logs.caller.CANNOT_INIT_PATTERN;
+                        };
+                        patterns.inHooks();
+                        patterns.inMap();
+                        Source.init(privates.patterns, onSuccess, onFail);
+                    };
+                    build       = function () {
+                        return Pattern.instance({
+                            id      : privates.id,
+                            url     : self.url,
+                            hooks   : privates.hooks,
+                            caller  : privates.__instance
+                        }).build();
+                    };
+                    signature   = function () {
+                        return logs.SIGNATURE + ':: caller (' + self.url + ')';
+                    };
+                    returning   = {
+                        render      : render,
+                        build       : build,
+                        mount       : mount,
+                        unmount     : unmount
+                    };
+                    return {
+                        render      : returning.render,
+                        build       : returning.build,
+                        mount       : returning.mount,
+                        unmount     : returning.unmount,
+                        hooks       : privates.hooks,
+                        map         : privates.map,
+                        conditions  : privates.conditions,
+                        controller  : privates.controller,
+                        exchange    : privates.exchange,
+                        onReady     : privates.onReady,
+                    };
                 },
-                init    : function (url, pattern) {
-                    var _instance = instance.storage.get(url);
-                    if (_instance === null && pattern !== void 0) {
-                        _instance = instance.instance({ url: url, pattern: pattern });
-                        instance.storage.add(url, _instance);
+                instance: function (parameters) {
+                    /// <summary>
+                    /// Load template; save it in virtual storage and local storage (if it's allowed)
+                    /// </summary>
+                    /// <param name="parameters" type="Object">Template parameters: &#13;&#10;
+                    /// {   [string]            url                     (source of template),                                               &#13;&#10;
+                    ///     [string || node]    node                    (target node for mount),                                            &#13;&#10;
+                    ///     [boolean]           replace                 (true - replace node by template; false - append template to node), &#13;&#10;
+                    ///     [object || array]   hooks                   (bind data),                                                        &#13;&#10;
+                    ///     [object]            conditions              (conditions),                                                       &#13;&#10;
+                    ///     [object]            onReady                 (onReady(res) in success, onReady(null, error, url) in fail,        &#13;&#10;
+                    ///     [object]            exchange                (resources),                                                        &#13;&#10;
+                    ///     [boolean]           remove_missing_hooks    (remove missed bind data),                                          &#13;&#10;
+                    /// }</param>
+                    /// <returns type="boolean">true - success; false - fail</returns>
+                    if (flex.oop.objects.validate(parameters, [ //For public usage
+                                                                { name: 'url',                  type: 'string'                                              },
+                                                                { name: 'node',                 type: ['node', 'string', 'array', 'NodeList'],      value: null         },
+                                                                { name: 'before',               type: ['node', 'string', 'array', 'NodeList'],      value: null         },
+                                                                { name: 'after',                type: ['node', 'string', 'array', 'NodeList'],      value: null         },
+                                                                { name: 'id',                   type: 'string',                                     value: flex.unique()},
+                                                                { name: 'replace',              type: 'boolean',                                    value: false        },
+                                                                { name: 'hooks',                type: ['object', 'array'],                          value: null         },
+                                                                { name: 'conditions',           type: 'object',                                     value: {}           },
+                                                                { name: 'controller',           type: ['function', 'object'],                       value: null         },
+                                                                { name: settings.events.ONREADY, type: 'function', value: function () { } },
+                                                                { name: 'map',                  type: 'object',                                     value: {}           },
+                                                                { name: 'exchange',             type: 'object',                                     value: null         },
+                                                                { name: 'remove_missing_hooks', type: 'boolean',                                    value: true         },
+                                                                //For internal usage
+                                                                { name: 'component',            type: 'string',                                     value: null         }]) !== false) {
+                        return _object({
+                            parent          : settings.classes.CALLER,
+                            constr          : function () {
+                                this.id     = parameters.id;
+                                this.url    = flex.system.url.restore(parameters.url);
+                            },
+                            privates        : {
+                                //From parameters
+                                id                  : parameters.id,
+                                node                : parameters.node   !== null ? (typeof parameters.node      === 'string' ? _nodes(parameters.node   ).target : (parameters.node     instanceof Array ? parameters.node      : (parameters.node      instanceof NodeList ? parameters.node   : [parameters.node]     ))) : null,
+                                before              : parameters.before !== null ? (typeof parameters.before    === 'string' ? _nodes(parameters.before ).target : (parameters.before   instanceof Array ? parameters.before    : (parameters.before    instanceof NodeList ? parameters.before : [parameters.before]   ))) : null,
+                                after               : parameters.after  !== null ? (typeof parameters.after     === 'string' ? _nodes(parameters.after  ).target : (parameters.after    instanceof Array ? parameters.after     : (parameters.after     instanceof NodeList ? parameters.after  : [parameters.after]    ))) : null,
+                                hooks               : parameters.hooks  !== null ? (parameters.hooks instanceof Array ? new ExArray(parameters.hooks) : new ExArray([parameters.hooks])) : null,
+                                replace             : parameters.replace,
+                                conditions          : parameters.conditions,
+                                controller          : parameters.controller,
+                                onReady             : parameters.onReady,
+                                exchange            : parameters.exchange,
+                                remove_missing_hooks: parameters.remove_missing_hooks,
+                                map                 : parameters.map,
+                                //Local
+                                component           : parameters.component,
+                                pattern             : null,
+                                mounted             : null,
+                                patterns            : []
+                            },
+                            prototype       : Caller.proto
+                        }).createInstanceClass();
+                    } else {
+                        return null;
                     }
-                    return _instance;
-                },
+                }
+            };
+            //END: caller class ===============================================
+            addition        = {
                 nodeList: {
                     NODE_LIST   : function(nodeList){
-                        if (nodeList instanceof NodeList) {
-                            this.collections = [nodeList];
+                        function addID(smth) {
+                            smth.collection_id  = flex.unique();
+                            smth.indexes        = null;
+                            return smth;
+                        };
+                        if (nodeList instanceof NodeList || nodeList instanceof Array) {
+                            this.collections = [addID(nodeList)];
                         } else if (helpers.isNode(nodeList)) {
-                            this.collections = [[nodeList]];
+                            this.collections = [addID([nodeList])];
                         } else {
                             this.collections = [];
                         }
                     },
                     init        : function () {
-                        instance.nodeList.NODE_LIST.prototype = {
+                        addition.nodeList.NODE_LIST.prototype = {
                             add         : function (nodeList) {
-                                if (nodeList instanceof NodeList) {
-                                    this.collections.push(nodeList);
-                                } else if (nodeList instanceof instance.nodeList.NODE_LIST) {
+                                function addID(smth) {
+                                    smth.collection_id  = flex.unique();
+                                    smth.indexes        = null;
+                                    return smth;
+                                };
+                                if (nodeList instanceof NodeList || nodeList instanceof Array) {
+                                    this.collections.push(addID(nodeList));
+                                } else if (nodeList instanceof addition.nodeList.NODE_LIST) {
                                     this.collections = this.collections.concat(nodeList.collections);
                                 } else if (helpers.isNode(nodeList)) {
-                                    this.collections.push([nodeList]);
+                                    this.collections.push(addID([nodeList]));
+                                }
+                            },
+                            setIndexes  : function (indexes) {
+                                this.collections.forEach(function (collection) {
+                                    collection.indexes = indexes;
+                                });
+                            },
+                            exclude     : function (nodeList) {
+                                var IDs     = [],
+                                    indexes = [],
+                                    self    = this;
+                                if (nodeList instanceof addition.nodeList.NODE_LIST) {
+                                    IDs     = nodeList.collections.map(function (collection) { return collection.collection_id; });
+                                    self.collections.forEach(function (collection, index) {
+                                        ~IDs.indexOf(collection.collection_id) && indexes.unshift(index);
+                                    });
+                                    indexes.forEach(function (index) {
+                                        self.collections.splice(index, 1);
+                                    });
                                 }
                             },
                             css         : function (css) {
@@ -2223,11 +2951,11 @@
                                     });
                                 }
                             },
-                            insertBefore: function (parent, before) {
-                                if (typeof parent.insertBefore === 'function' && helpers.isNode(before)) {
+                            insertBefore: function (before) {
+                                if (before.parentNode !== void 0 && before.parentNode !== null && typeof before.parentNode.insertBefore === 'function' && helpers.isNode(before)) {
                                     this.collections.forEach(function (nodeList) {
                                         Array.prototype.forEach.call(nodeList, function (node) {
-                                            parent.insertBefore(node, before);
+                                            before.parentNode.insertBefore(node, before);
                                         });
                                     });
                                 }
@@ -2256,12 +2984,13 @@
                                 return result.length === 1 ? result[0] : result;
                             },
                             on          : function (event, handle){
+                                var self = this;
                                 if (typeof handle === 'function') {
-                                    this.collections.forEach(function (nodeList) {
-                                        Array.prototype.forEach.call(nodeList, function (node) {
-                                            var target = instance.nodeList.create(node);
-                                            target.indexes = node[settings.other.INDEXES];
-                                            flex.events.DOM.add(node, event, handle.bind(target));
+                                    this.collections.forEach(function (collection) {
+                                        Array.prototype.forEach.call(collection, function (node) {
+                                            flex.events.DOM.add(node, event, function (event) { 
+                                                handle(event, collection.indexes);
+                                            });
                                         });
                                     });
                                 } else {
@@ -2275,31 +3004,105 @@
                                         result.push(node);
                                     });
                                 });
+                                return result;
                             }
                         };
                     },
                     create      : function (nodeList) {
-                        return new instance.nodeList.NODE_LIST(nodeList);
+                        return new addition.nodeList.NODE_LIST(nodeList);
                     },
                     addMethod   : function (name, method) {
                         if (typeof name === 'string' && typeof method === 'function') {
-                            if (instance.nodeList.NODE_LIST.prototype[name] !== void 0) {
+                            if (addition.nodeList.NODE_LIST.prototype[name] !== void 0) {
                                 flex.logs.log('Method [' + name + '] of NODE_LIST list class was overwritten.', flex.logs.types.NOTIFICATION);
                             }
-                            instance.nodeList.NODE_LIST.prototype[name] = method;
+                            addition.nodeList.NODE_LIST.prototype[name] = method;
                         }
                     }
                 },
+                listener: {
+                    LISTENER: function (instance) {
+                        var instance        = instance,
+                            handles         = {},
+                            globals         = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.GLOBAL_EVENTS, {}),
+                            bind            = null,
+                            unbind          = null,
+                            trigger         = null;
+                        bind    = function bind(event, handle, id, globaly) {
+                            var id      = ~['string', 'number'].indexOf(typeof id) ? id : flex.unique(),
+                                globaly = typeof globaly    === 'boolean' ? globaly : false;
+                            if (handle instanceof Function && ~['string', 'number'].indexOf(typeof event)) {
+                                handles[event] !== void 0 ? handles[event] : {};
+                                globaly     && (handles[event][id] = handle);
+                                !globaly    && (globals[event][id] = handle);
+                                handle[settings.other.EVENTS_HANDLE_ID] = id;
+                                return id;
+                            }
+                            return false;
+                        };
+                        unbind  = function unbind(event, handle, id) {
+                            var id      = ~['string', 'number'].indexOf(typeof id)      ? id    : null,
+                                event   = ~['string', 'number'].indexOf(typeof event)   ? event : null,
+                                handle  = handle instanceof Function ? handle : null;
+                            if (event !== null) {
+                                if (id === null && handle !== null) {
+                                    id = handle[settings.other.EVENTS_HANDLE_ID] !== void 0 ? handle[settings.other.EVENTS_HANDLE_ID] : null;
+                                }
+                                if (id !== null) {
+                                    handles[event][id] !== void 0 && (delete handles[event][id]);
+                                    globals[event][id] !== void 0 && (delete globals[event][id]);
+                                    Object.keys(handles[event]).length === 0 && (delete handles[event]);
+                                    Object.keys(globals[event]).length === 0 && (delete globals[event]);
+                                    return true;
+                                }
+                            }
+                            return false;
+                        };
+                        trigger = function trigger(event, params, globaly) {
+                            var event   = ~['string', 'number'].indexOf(typeof event) ? event : null,
+                                globaly = typeof globaly    === 'boolean' ? globaly : false,
+                                root    = typeof root       === 'boolean' ? root    : false,
+                                storage = globaly ? globals : handles;
+                            if (event !== null) {
+                                if (storage[event] !== void 0) {
+                                    _object(storage[event]).forEach(function (handle) {
+                                        handle.call(instance, params);
+                                    });
+                                    return true;
+                                }
+                            }
+                            return false;
+                        };
+                        this.bind           = function bind(event, handle, id) {
+                            return bind(event, handle, id, false);
+                        };
+                        this.bindGlobal     = function bindGlobal(event, handle, id) {
+                            return bind(event, handle, id, true);
+                        };
+                        this.unbind         = function unbind(event, handle, id) {
+                            return unbind(event, handle, id);
+                        };
+                        this.trigger        = function trigger(event, params) {
+                            return trigger(event, params, false);
+                        };
+                        this.triggerGlobal  = function triggerGlobal(event, params) {
+                            return trigger(event, params, true);
+                        };
+                    },
+                    create  : function () {
+                        return new addition.listener.LISTENER(instance);
+                    }
+                },
                 map     : {
-                    MAP: function (context) {
+                    MAP     : function (context) {
                         if (context !== void 0 && context.nodeType !== void 0) {
                             this.context = context;
                         } else {
                             throw Error('Context [context] should be a node.');
                         }
                     },
-                    init: function () {
-                        instance.map.MAP.prototype = {
+                    init    : function () {
+                        addition.map.MAP.prototype = {
                             select: function (selector) {
                                 var results = _nodes(selector, false, this.context);
                                 if (results.target !== null && results.target.length > 0) {
@@ -2310,476 +3113,16 @@
                             }
                         };
                     },
-                    create: function (context) {
-                        return new instance.map.MAP(context);
+                    create  : function (context) {
+                        return new addition.map.MAP(context);
                     }
                 }
             };
-            //END: instance class ===============================================
-            //BEGIN: result class ===============================================
-            result      = {
-                proto       : function (privates) {
-                    var mount       = null,
-                        returning   = null,
-                        clone       = null;
-                    clone       = function (hooks) {
-                        return privates.instance.clone(privates.hooks_map, hooks);
-                    };
-                    mount       = function (destination, before, after, replace) {
-                        if (destination !== null) {
-                            Array.prototype.forEach.call(destination, function (parent) {
-                                privates.nodes.forEach(function (node) {
-                                    if (!replace) {
-                                        parent.appendChild(node);
-                                    } else {
-                                        parent.parentNode.insertBefore(node, parent);
-                                    }
-                                });
-                                if (replace) {
-                                    parent.parentNode.removeChild(parent);
-                                }
-                            });
-                        } else if (before !== null && before.parentNode !== void 0 && before.parentNode !== null) {
-                            Array.prototype.forEach.call(before, function (parent) {
-                                privates.nodes.forEach(function (node) {
-                                    before.parentNode.insertBefore(node, before);
-                                });
-                            });
-                        } else if (after !== null && after.parentNode !== void 0 && after.parentNode !== null) {
-                            Array.prototype.forEach.call(after, function (parent) {
-                                var _before = after.nextSibling !== void 0 ? after.nextSibling : null;
-                                if (_before !== null) {
-                                    privates.nodes.forEach(function (node) {
-                                        _before.parentNode.insertBefore(node, _before);
-                                    });
-                                } else {
-                                    privates.nodes.forEach(function (node) {
-                                        after.parentNode.appendChild(node);
-                                    });
-                                }
-                            });
-                        }
-                        flex.events.core.fire(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, privates.nodes);
-                    };
-                    returning   = {
-                        nodes           : function () { return privates.nodes;          },
-                        map             : function () { return privates.map;            },
-                        model           : function () { return privates.model;          },
-                        dom             : function () { return privates.dom;            },
-                        binds           : function () { return privates.binds;          },
-                        handle          : function () { return privates.handle;         },
-                        hooks_map       : function () { return privates.hooks_map;      },
-                        instance        : function () { return privates.instance;       },
-                        clone           : clone,
-                        mount           : mount
-                    };
-                    return {
-                        nodes       : returning.nodes,
-                        mount       : returning.mount,
-                        map         : returning.map,
-                        dom         : returning.dom,
-                        model       : returning.model,
-                        binds       : returning.binds,
-                        hooks_map   : returning.hooks_map,
-                        instance    : returning.instance,
-                        handle      : returning.handle,
-                        clone       : returning.clone,
-                    };
-                },
-                instance    : function (parameters) {
-                    if (flex.oop.objects.validate(parameters, [ { name: 'url',              type: 'string'                              },
-                                                                { name: 'nodes',            type: 'array'                               },
-                                                                { name: 'handle',           type: 'function'                            },
-                                                                { name: 'hooks_map',        type: 'object',             value: null     },
-                                                                { name: 'instance',         type: 'object',             value: null     },
-                                                                { name: 'map',              type: ['object', 'array'],  value: null     },
-                                                                { name: 'model',            type: ['object', 'array'],  value: null     },
-                                                                { name: 'dom',              type: ['object', 'array'],  value: null     },
-                                                                { name: 'binds',            type: ['object', 'array'],  value: null     }]) !== false) {
-                        return _object({
-                            parent      : settings.classes.RESULT,
-                            constr      : function () {
-                                this.url = flex.system.url.restore(parameters.url);
-                            },
-                            privates    : {
-                                nodes           : parameters.nodes,
-                                map             : parameters.map,
-                                model           : parameters.model,
-                                binds           : parameters.binds,
-                                dom             : parameters.dom,
-                                handle          : parameters.handle,
-                                hooks_map       : parameters.hooks_map,
-                                instance        : parameters.instance,
-                            },
-                            prototype   : result.proto
-                        }).createInstanceClass();
-                    } else {
-                        return null;
-                    }
-                },
-            };
-            //END: result class ===============================================
-            //BEGIN: caller class ===============================================
-            caller      = {
-                proto   : function (privates){
-                    var self        = this,
-                        mount       = null,
-                        render      = null,
-                        patterns    = null,
-                        hooks       = null,
-                        signature   = null,
-                        returning   = null,
-                        component   = null;
-                    patterns    = {
-                        reset   : function(){
-                            privates.patterns = {};
-                        },
-                        find    : function (hooks) {
-                            hooks = hooks instanceof Array ? hooks : [hooks];
-                            if (hooks !== null) {
-                                hooks.forEach(function (_hooks) {
-                                    _object(_hooks).forEach(function (hook_name, hook_value) {
-                                        if (hook_value instanceof settings.classes.CALLER) {
-                                            if (privates.patterns[hook_value.url] === void 0) {
-                                                privates.patterns[hook_value.url] = hook_value.url;
-                                                patterns.find(hook_value.hooks());
-                                            }
-                                        }
-                                    });
-                                });
-                            }
-                            if (privates.patterns[self.url] === void 0) {
-                                privates.patterns[self.url] = self.url;
-                            }
-                        },
-                    };
-                    component   = {
-                        getStructure    : function(html){
-                            function analysis(nodes, storage) {
-                                Array.prototype.forEach.call(nodes, function (node) {
-                                    var sub     = node.nodeName.toLowerCase(),
-                                        current = {};
-                                    current.url = node.hasAttribute('src') ? node.getAttribute('src') : null;
-                                    if (current.url !== null) {
-                                        current.sub = {};
-                                        if (node.children.length > 0) {
-                                            analysis(node.children, current.sub);
-                                        }
-                                        if (storage[sub] !== void 0) {
-                                            if (storage[sub] instanceof Array) {
-                                                storage[sub].push(current);
-                                            } else {
-                                                storage[sub] = [storage[sub], current];
-                                            }
-                                        } else {
-                                            storage[sub] = current;
-                                        }
-                                    } else {
-                                        flex.logs.log(logs.SIGNATURE + 'If you use inside template other templates, you cannot use nothing else. And src should be defined fro all included templates.', flex.logs.types.CRITICAL);
-                                        throw Error(logs.caller.PATTERN_WITHOUT_SRC);
-                                        return false;
-                                    }
-                                });
-                            };
-                            function buildCaller(structure, hooks, callers) {
-                                function add(_item, _hooks, structure, key) {
-                                    _object(_item).forEach(function (hook_name, hook_value) {
-                                        if (typeof hook_value !== 'object') {
-                                            _hooks[hook_name] = hook_value;
-                                        }
-                                    });
-                                    if (structure[key].sub !== void 0) {
-                                        buildCaller(structure[key].sub, _item, _hooks);
-                                    }
-                                };
-                                _object(structure).forEach(function (key, value) {
-                                    if (value instanceof Array) {
-                                        flex.logs.log(logs.SIGNATURE + 'You cannot use templates in templates in same level. You can only include template into templates. Problematic hook: ' + key + '.', flex.logs.types.CRITICAL);
-                                        throw Error(logs.caller.ONLY_ONE_TEMPLATE_ON_SAME_LEVEL);
-                                    } else {
-                                        callers[key] = {
-                                            url     : value.url,
-                                            hooks   : {}
-                                        };
-                                        if (hooks[key] !== void 0 && hooks[key] !== null && typeof hooks[key] === 'object' && !(hooks[key] instanceof Array)) {
-                                            add(hooks[key], callers[key].hooks, structure, key);
-                                        } else if (hooks[key] instanceof Array) {
-                                            callers[key].hooks = [];
-                                            hooks[key].forEach(function (item) {
-                                                var current = {};
-                                                add(item, current, structure, key);
-                                                callers[key].hooks.push(current);
-                                            });
-                                        }
-                                    }
-                                });
-                            };
-                            var container   = document.createElement('div'),
-                                structure   = {},
-                                callers     = {},
-                                _hooks      = {};
-                            container.innerHTML = html;
-                            analysis(container.children, structure);
-                            if (structure[config.values.PATTERN_NODE.toLowerCase()] !== void 0) {
-                                _hooks[config.values.PATTERN_NODE.toLowerCase()] = privates.hooks;
-                                buildCaller(structure, _hooks, callers);
-                                return callers[config.values.PATTERN_NODE.toLowerCase()];
-                            } else {
-                                throw Error(logs.caller.CANNOT_FIND_ROOT_TEMPLATE);
-                                return false;
-                            }
-                        },
-                        addGetters      : function(callers){
-                            if (callers.hooks !== void 0) {
-                                if (callers.hooks instanceof Array) {
-                                    callers.hooks.forEach(function (item, index) {
-                                        _object(item).forEach(function (hook_name, hook_value) {
-                                            if (typeof hook_value === 'object' && !(hook_value instanceof Array) && hook_value.url !== void 0) {
-                                                callers.hooks[index][hook_name] = caller.instance({
-                                                    url     : hook_value.url,
-                                                    hooks   : component.addGetters(hook_value)
-                                                });
-                                            }
-                                        });
-                                    });
-                                } else if (typeof callers.hooks === 'object') {
-                                    _object(callers.hooks).forEach(function (hook_name, hook_value) {
-                                        if (typeof hook_value === 'object' && !(hook_value instanceof Array) && hook_value.url !== void 0) {
-                                            callers.hooks[hook_name] = caller.instance({
-                                                url     : hook_value.url,
-                                                hooks   : component.addGetters(hook_value)
-                                            });
-                                        }
-                                    });
-                                }
-                            }
-                            return callers.hooks;
-                        },
-                        process         : function (html) {
-                            var _callers = {};
-                            if ((new RegExp('<\\s*' + config.values.PATTERN_NODE + '\\s{1,}src\\s*=')).test(html)) {
-                                _callers = component.getStructure(html);
-                                _object(privates).forEach(function (name, value) {
-                                    if (['hooks', '__instance', 'pattern'].indexOf(name) === -1) {
-                                        _callers[name] = value;
-                                    }
-                                });
-                                //Set URL to component (it's necessary for cases if component has controller
-                                _callers.component = self.url;
-                                //Add getters
-                                component.addGetters(_callers);
-                                return caller.instance(_callers);
-                            } else {
-                                return false;
-                            }
-                        }
-                    };
-                    hooks       = {
-                        values  : {
-                            caller  : function (value) {
-                                var _instance   = instance.init(value.url),
-                                    _hooks      = value.hooks(),
-                                    result      = null;
-                                if (_instance === null) {
-                                    flex.logs.log(signature() + logs.caller.CANNOT_GET_CHILD_PATTERN + '(' + value.url + ')', flex.logs.types.CRITICAL);
-                                    flex.system.handle(privates.callbacks.fail, self.url);
-                                    throw logs.caller.CANNOT_GET_CHILD_PATTERN;
-                                } else {
-                                    hooks.apply(_hooks);
-                                    return _instance.bind(_hooks, value.resources(), value.conditions(), value.component());
-                                }
-                            }
-                        },
-                        value   : function (something) {
-                            function getValue(something) {
-                                if (something instanceof settings.classes.CALLER) {
-                                    return hooks.values.caller(something);
-                                }
-                                if (typeof something === 'function') {
-                                    return getValue(something());
-                                }
-                                return something;
-                            };
-                            if (something !== void 0) {
-                                return getValue(something);
-                            }
-                            return '';
-                        },
-                        apply   : function (_hooks) {
-                            var _hooks = _hooks !== void 0 ? _hooks : privates.hooks;
-                            if (_hooks instanceof Array) {
-                                _hooks.forEach(function (_, index) {
-                                    _hooks[index] = hooks.apply(_hooks[index]);
-                                });
-                            } else if (typeof _hooks === 'object' && _hooks !== null) {
-                                _object(_hooks).forEach(function (hook_name, hook_value) {
-                                    _hooks[hook_name] = hooks.value(hook_value);
-                                });
-                            }
-                            return _hooks;
-                        },
-                        defaults: function () {
-                            function process(source, destination) {
-                                _object(source).forEach(function (hook_name, hook_value) {
-                                    if (destination[hook_name] === void 0) {
-                                        destination[hook_name] = hook_value;
-                                    } else {
-                                        if (destination[hook_name] !== null && typeof destination[hook_name] === 'object') {
-                                            process(hook_value, destination[hook_name]);
-                                        }
-                                    }
-                                });
-                            };
-                            var defaults = defaultshooks.storage.get(self.url);
-                            if (defaults !== null && typeof defaults === 'object') {
-                                process(defaults, privates.hooks);
-                            }
-                            return true;
-                        }
-                    };
-                    render      = function (clone) {
-                        var clone = typeof clone === 'boolean' ? clone : false;
-                        if (!clone) {
-                            patterns.reset();
-                            patterns.find(privates.hooks);
-                            source.init(
-                                (function () {
-                                    var list = [];
-                                    _object(privates.patterns).forEach(function (url) {
-                                        list.push(url);
-                                    });
-                                    return list;
-                                }()),
-                                function (sources) {
-                                    var _component = null;
-                                    hooks.defaults();
-                                    _component = sources.length === 1 ? component.process(sources[0].html()) : null;
-                                    if (_component !== null) {
-                                        _component.render(false, self.url);
-                                    } else {
-                                        hooks.apply();
-                                        privates.pattern = instance.init(self.url);
-                                        if (privates.pattern !== null) {
-                                            privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions, privates.component);
-                                            if (privates.pattern instanceof settings.classes.RESULT) {
-                                                privates.pattern.mount(privates.node, privates.before, privates.after, privates.replace);
-                                                if (privates.callbacks.success !== null) {
-                                                    privates.pattern.handle()(privates.callbacks.success, privates.resources);
-                                                }
-                                            }
-                                        } else {
-                                            flex.logs.log(signature() + logs.caller.CANNOT_GET_PATTERN, flex.logs.types.CRITICAL);
-                                            flex.system.handle(privates.callbacks.fail, self.url);
-                                            throw logs.caller.CANNOT_GET_PATTERN;
-                                        }
-                                    }
-                                },
-                                function () {
-                                    flex.logs.log(signature() + logs.caller.CANNOT_INIT_PATTERN, flex.logs.types.CRITICAL);
-                                    flex.system.handle(privates.callbacks.fail, self.url);
-                                    throw logs.caller.CANNOT_INIT_PATTERN;
-                                }
-                            );
-                        } else {
-                            hooks.apply();
-                            privates.pattern = instance.init(self.url);
-                            if (privates.pattern !== null) {
-                                privates.pattern = privates.pattern.build(privates.hooks, privates.resources, privates.conditions, privates.component);
-                                if (privates.pattern instanceof settings.classes.RESULT) {
-                                    return privates.pattern;
-                                }
-                            }
-                        }
-                    };
-                    signature   = function () {
-                        return logs.SIGNATURE + ':: caller (' + self.url + ')';
-                    };
-                    returning   = {
-                        render      : render,
-                        hooks       : function () { return privates.hooks;      },
-                        resources   : function () { return privates.resources;  },
-                        conditions  : function () { return privates.conditions; },
-                        component   : function () { return privates.component;  },
-                    };
-                    return {
-                        render      : returning.render,
-                        hooks       : returning.hooks,
-                        conditions  : returning.conditions,
-                        resources   : returning.resources,
-                        component   : returning.component,
-                    };
-                },
-                instance: function (parameters) {
-                    /// <summary>
-                    /// Load template; save it in virtual storage and local storage (if it's allowed)
-                    /// </summary>
-                    /// <param name="parameters" type="Object">Template parameters: &#13;&#10;
-                    /// {   [string]            url                     (source of template),                                               &#13;&#10;
-                    ///     [string || node]    node                    (target node for mount),                                            &#13;&#10;
-                    ///     [boolean]           replace                 (true - replace node by template; false - append template to node), &#13;&#10;
-                    ///     [object || array]   hooks                   (bind data),                                                        &#13;&#10;
-                    ///     [array]             data                    (bind data for collection),                                         &#13;&#10;
-                    ///     [object]            conditions              (conditions),                                                       &#13;&#10;
-                    ///     [object]            callbacks               (callbacks),                                                        &#13;&#10;
-                    ///     [object]            resources               (callbacks),                                                        &#13;&#10;
-                    ///     [boolean]           remove_missing_hooks    (remove missed bind data),                                          &#13;&#10;
-                    /// }</param>
-                    /// <returns type="boolean">true - success; false - fail</returns>
-                    if (flex.oop.objects.validate(parameters, [ //For public usage
-                                                                { name: 'url',                  type: 'string'                                              },
-                                                                { name: 'node',                 type: ['node', 'string', 'array', 'NodeList'],      value: null         },
-                                                                { name: 'before',               type: ['node', 'string', 'array', 'NodeList'],      value: null         },
-                                                                { name: 'after',                type: ['node', 'string', 'array', 'NodeList'],      value: null         },
-                                                                { name: 'id',                   type: 'string',                                     value: flex.unique()},
-                                                                { name: 'replace',              type: 'boolean',                                    value: false        },
-                                                                { name: 'hooks',                type: ['object', 'array'],                          value: null         },
-                                                                { name: 'data',                 type: 'array',                                      value: null         },
-                                                                { name: 'conditions',           type: 'object',                                     value: null         },
-                                                                { name: 'callbacks',            type: 'object',                                     value: {}           },
-                                                                { name: 'resources',            type: 'object',                                     value: {}           },
-                                                                { name: 'remove_missing_hooks', type: 'boolean',                                    value: true         },
-                                                                //For internal usage
-                                                                { name: 'component',            type: 'string',                                     value: null         }]) !== false) {
-                        flex.oop.objects.validate(parameters.callbacks, [   { name: 'before',   type: 'function', value: null },
-                                                                            { name: 'success',  type: 'function', value: null },
-                                                                            { name: 'fail',     type: 'function', value: null }]);
-                        return _object({
-                            parent          : settings.classes.CALLER,
-                            constr          : function () {
-                                this.url = flex.system.url.restore(parameters.url);
-                                //Uncomment to check structure of component
-                                //this._hooks = parameters.hooks;
-                            },
-                            privates        : {
-                                //From parameters
-                                id                  : parameters.id,
-                                node                : parameters.node   !== null ? (typeof parameters.node      === 'string' ? _nodes(parameters.node   ).target : (parameters.node     instanceof Array ? parameters.node      : (parameters.node      instanceof NodeList ? parameters.node   : [parameters.node]     ))) : null,
-                                before              : parameters.before !== null ? (typeof parameters.before    === 'string' ? _nodes(parameters.before ).target : (parameters.before   instanceof Array ? parameters.before    : (parameters.before    instanceof NodeList ? parameters.before : [parameters.before]   ))) : null,
-                                after               : parameters.after  !== null ? (typeof parameters.after     === 'string' ? _nodes(parameters.after  ).target : (parameters.after    instanceof Array ? parameters.after     : (parameters.after     instanceof NodeList ? parameters.after  : [parameters.after]    ))) : null,
-                                replace             : parameters.replace,
-                                hooks               : parameters.hooks,
-                                data                : parameters.data,
-                                conditions          : parameters.conditions,
-                                callbacks           : parameters.callbacks,
-                                remove_missing_hooks: parameters.remove_missing_hooks,
-                                resources           : parameters.resources,
-                                //Local
-                                component           : parameters.component,
-                                pattern             : null
-                            },
-                            prototype       : caller.proto
-                        }).createInstanceClass();
-                    } else {
-                        return null;
-                    }
-                }
-            };
-            //END: caller class ===============================================
-            layout      = {
+            layout          = {
                 init    : function (is_auto){
                     function isValid(pattern) {
                         var nodeName = pattern.parentNode.nodeName.toLowerCase();
-                        if (nodeName !== config.values.PATTERN_NODE) {
+                        if (nodeName !== config.get().PATTERN_NODE) {
                             if (nodeName !== 'body'){
                                 return isValid(pattern.parentNode);
                             } else {
@@ -2789,12 +3132,12 @@
                             return false;
                         }
                     };
-                    var patterns    = _nodes(config.values.PATTERN_NODE).target,
+                    var patterns    = _nodes(config.get().PATTERN_NODE).target,
                         is_auto     = typeof is_auto === 'boolean' ? is_auto : false;
                     if (patterns !== null && patterns instanceof NodeList && patterns.length > 0) {
                         Array.prototype.forEach.call(patterns, function (pattern) {
                             if (isValid(pattern)) {
-                                if ((!pattern.hasAttribute('success') && !pattern.hasAttribute('error')) || !is_auto) {
+                                if (!pattern.hasAttribute(settings.events.ONREADY) || !is_auto) {
                                     layout.caller(pattern);
                                 }
                             }
@@ -2836,7 +3179,7 @@
                         is_child    = is_child !== void 0 ? is_child : false,
                         url         = null;
                     _caller = {
-                        url     : pattern.hasAttribute('src') ? pattern.getAttribute('src') : null,
+                        url     : pattern.hasAttribute(config.get().PATTERN_SRC) ? pattern.getAttribute(config.get().PATTERN_SRC) : null,
                         hooks   : {}
                     };
                     Array.prototype.forEach.call(pattern.children, function (child) {
@@ -2870,15 +3213,12 @@
                     if (!is_child && _caller.url !== null) {
                         _caller.node        = pattern;
                         _caller.replace     = true;
-                        _caller.callbacks   = {
-                            success : getCallback(pattern, 'success'),
-                            error   : getCallback(pattern, 'error'),
-                        };
-                        _caller = caller.instance(_caller).render();
+                        _caller.onReady     = getCallback(pattern, settings.events.ONREADY);
+                        _caller             = Caller.instance(_caller).render();
                         return _caller;
                     } else {
                         if (_caller.url !== null) {
-                            _caller = caller.instance(_caller);
+                            _caller = Caller.instance(_caller);
                             return _caller;
                         }
                     }
@@ -2894,7 +3234,7 @@
                     }
                 }
             };
-            controllers = {
+            controllers     = {
                 references  : {
                     assign          : function (url, pattern_url) {
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONTROLLERS_LINKS, {});
@@ -2911,20 +3251,14 @@
                     add : function (pattern_url, controller) {
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONTROLLERS_STORAGE, {});
                         if (storage[pattern_url] === void 0) {
-                            storage[pattern_url] = [];
+                            storage[pattern_url] = controller;
+                        } else {
+                            flex.logs.log('[' + pattern_url + ']' + logs.controller.CONTROLLER_DEFINED_MORE_THAN_ONCE, flex.logs.types.WARNING);
                         }
-                        storage[pattern_url].push(controller);
                     },
-                    get : function (urls) {
-                        var storage     = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONTROLLERS_STORAGE, {}),
-                            urls        = typeof urls === 'string' ? [urls] : urls,
-                            result      = [];
-                        urls.forEach(function (url) {
-                            if (storage[url] !== void 0) {
-                                result = result.concat(storage[url]);
-                            }
-                        });
-                        return result;
+                    get : function (url) {
+                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONTROLLERS_STORAGE, {});
+                        return storage[url] !== void 0 ? storage[url] : null;
                     },
                 },
                 current     : {
@@ -2942,7 +3276,7 @@
                 attach      : function (controller) {
                     var url     = null,
                         _source = null;
-                    if (typeof controller === 'function') {
+                    if (~['function', 'object'].indexOf(typeof controller)) {
                         url = controllers.current.get() !== null ? controllers.current.get() : flex.resources.attach.js.getCurrentSRC();
                         if (url !== null) {
                             _source = controllers.references.getPatternURL(url);
@@ -2951,8 +3285,8 @@
                     }
                 },
             };
-            storage     = {
-                virtual: {
+            storage         = {
+                virtual : {
                     add: function (url, content) {
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.VIRTUAL_STORAGE_ID, {});
                         if (storage !== null) {
@@ -2970,7 +3304,7 @@
                         return null;
                     }
                 },
-                local: {
+                local   : {
                     add: function (url, content) {
                         if (settings.storage.USE_LOCALSTORAGE === true) {
                             return flex.localStorage.addJSON(url, {
@@ -2994,11 +3328,11 @@
                         return null;
                     }
                 },
-                add: function (url, content) {
+                add     : function (url, content) {
                     storage.local.  add(url, content);
                     storage.virtual.add(url, content);
                 },
-                get: function (url) {
+                get     : function (url) {
                     var result = storage.virtual.get(url);
                     if (result === null) {
                         result = storage.local.get(url);
@@ -3006,7 +3340,7 @@
                     return result;
                 }
             };
-            measuring   = {
+            measuring       = {
                 measure: (function () {
                     var storage = {};
                     return function (id, operation) {
@@ -3023,7 +3357,7 @@
                     };
                 }())
             };
-            conditions  = {
+            conditions      = {
                 storage : {
                     add: function (pattern_url, _conditions) {
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.CONDITIONS_STORAGE, {});
@@ -3046,7 +3380,7 @@
                     }
                 }
             };
-            defaultshooks = {
+            defaultshooks   = {
                 storage : {
                     add: function (pattern_url, _hooks) {
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.HOOKS_STORAGE, {});
@@ -3067,9 +3401,50 @@
                             defaultshooks.storage.add(_source, _hooks);
                         }
                     }
+                },
+                apply   : function (hooks, url) {
+                    function process(source, destination) {
+                        _object(source).forEach(function (hook_name, hook_value) {
+                            if (destination[hook_name] === void 0) {
+                                destination[hook_name] = hook_value;
+                            } else {
+                                if (destination[hook_name] !== null && typeof destination[hook_name] === 'object') {
+                                    process(hook_value, destination[hook_name]);
+                                }
+                            }
+                        });
+                    };
+                    var defaults = defaultshooks.storage.get(url);
+                    if (defaults !== null && typeof defaults === 'object') {
+                        process(defaults, hooks);
+                    }
+                    return hooks;
                 }
             };
-            helpers     = {
+            defaultsmap     = {
+                storage : {
+                    add: function (pattern_url, _hooks) {
+                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.MAPS_STORAGE, {});
+                        storage[pattern_url] = _hooks;
+                    },
+                    get : function (pattern_url) {
+                        var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.MAPS_STORAGE, {});
+                        return storage[pattern_url] !== void 0 ? storage[pattern_url] : null;
+                    },
+                },
+                attach  : function (_map) {
+                    var url     = null,
+                        _source = null;
+                    if (typeof _map === 'object' && _map !== null) {
+                        url = controllers.current.get() !== null ? controllers.current.get() : flex.resources.attach.js.getCurrentSRC();
+                        if (url !== null) {
+                            _source = controllers.references.getPatternURL(url);
+                            defaultsmap.storage.add(_source, _map);
+                        }
+                    }
+                }
+            };
+            helpers         = {
                 testReg     : function(reg, str){
                     reg.lastIndex = 0;
                     return reg.test(str);
@@ -3128,47 +3503,61 @@
                         return false;
                     }
                 },
-                tableFix    : function (html) {
-                    var tables  = html.match(settings.regs.TABLE),
-                        hooks   = [];
-                    if (tables instanceof Array) {
-                        tables.forEach(function (table) {
-                            var _hooks  = null;
-                            table       = table.replace(settings.regs.TABLE_TAG, '').replace(settings.regs.ANY_TAG, '');
-                            _hooks      = table.match(settings.regs.HOOK);
-                            if (_hooks instanceof Array) {
-                                hooks = hooks.concat(_hooks);
-                            }
-                        });
-                        hooks.forEach(function (hook) {
-                            var _hook = hook.replace(settings.regs.HOOK_BORDERS, '');
-                            html = html.replace(new RegExp(settings.regs.HOOK_OPEN + _hook + settings.regs.HOOK_CLOSE, 'gi'), '<!--' + hook + '-->');
-                        });
-                    }
-                    return html;
-                },
-                getTextNode : function (node, text) {
-                    var target = null;
+                isArray     : function(arr) { return arr instanceof Array ? true : arr instanceof ExArray;},
+                getTextNode : function (node, text, index) {
+                    var target  = null,
+                        index   = index !== void 0 ? index : null;
                     if (node.childNodes !== void 0) {
-                        try{
-                            Array.prototype.forEach.call(node.childNodes, function(child){
-                                if (child.nodeType === 3 && child.nodeValue === text){
-                                    target = child;
-                                    throw 'found';
-                                }
-                            });
-                        } catch (e){ }
+                        if (index !== null && node.childNodes[index] !== void 0 && node.childNodes[index].nodeValue === text) {
+                            target = node.childNodes[index];
+                        } else {
+                            try {
+                                Array.prototype.forEach.call(node.childNodes, function (child) {
+                                    if (child.nodeType === 3 && child.nodeValue === text) {
+                                        target = child;
+                                        throw 'found';
+                                    }
+                                });
+                            } catch (e) { }
+                        }
                     }
                     return target;
+                },
+                getPattern  : function (html){
+                    function getParent (child_tag) {
+                        if (typeof child_tag === 'string') {
+                            if (settings.compatibility.CHILD_TO_PARENT[child_tag] !== void 0) {
+                                return document.createElement(settings.compatibility.CHILD_TO_PARENT[child_tag]);
+                            } else {
+                                return document.createElement(settings.compatibility.BASE);
+                            }
+                        } else {
+                            return null;
+                        }
+                    };
+                    function getTag(html) {
+                        var tag = html.match(settings.regs.FIRST_TAG);
+                        if (tag !== null) {
+                            if (tag.length === 1) {
+                                return tag[0].replace(settings.regs.TAG_BORDERS, '').replace(/\s/gi, '').match(settings.regs.FIRST_WORD)[0].toLowerCase()
+                            }
+                        }
+                        return null;
+                    }
+                    var tag = getTag(html);
+                    if (tag !== null){
+                        return getParent(tag);
+                    }
+                    return null;
                 }
             };
-            callers     = {
+            callers         = {
                 init    : function () {
                     flex.callers.define.node('ui.patterns.append', function (parameters) {
                         if (typeof parameters === 'object' && this.target) {
                             parameters.node = this.target;
                         }
-                        return caller.instance(parameters);
+                        return Caller.instance(parameters);
                     });
                     flex.callers.define.nodes('ui.patterns.append', function () {
                         var result = [];
@@ -3176,26 +3565,27 @@
                             if (typeof parameters === 'object' && this.target) {
                                 parameters.node = this.target;
                             }
-                            result.push(caller.instance(parameters));
+                            result.push(Caller.instance(parameters));
                         });
                         return result;
                     });
                 }
             };
             //Init addition classes
-            instance.nodeList.init();
-            instance.map.init();
-            //Init modules
-            if (flex.libraries !== void 0) {
-                if (flex.libraries.events !== void 0 && flex.libraries.binds !== void 0) {
-                    flex.libraries.events.create();
-                    flex.libraries.binds.create();
-                }
-            }
+            addition.nodeList.init();
+            addition.map.init();
+            //Add events
+            (function () {
+                flex.registry.events.ui             === void 0 && (flex.registry.events.ui          = {});
+                flex.registry.events.ui.patterns    === void 0 && (flex.registry.events.ui.patterns = {
+                    GROUP   : 'flex.registry.events.ui.patterns',
+                    MOUNTED : 'MOUNTED'
+                });
+            }());
             //Private part
             privates    = {
-                preload     : source.init,
-                get         : caller.instance,
+                preload     : Source.init,
+                get         : Caller.instance,
                 controller  : {
                     attach  : controllers.attach
                 },
@@ -3203,11 +3593,14 @@
                     attach  : conditions.attach
                 },
                 hooks       : {
-                    attach: defaultshooks.attach
+                    attach  : defaultshooks.attach
+                },
+                map         : {
+                    attach  : defaultsmap.attach
                 },
                 classes     : {
                     NODE_LIST: {
-                        addMethod : instance.nodeList.addMethod
+                        addMethod : addition.nodeList.addMethod
                     }
                 },
                 setup       : config.setup,
@@ -3219,6 +3612,7 @@
             window['_controller'] = privates.controller.attach;
             window['_conditions'] = privates.conditions.attach;
             window['_hooks'     ] = privates.hooks.attach;
+            window['_map'       ] = privates.map.attach;
             //Run layout parser
             layout.attach();
             //Public part
@@ -3238,12 +3632,13 @@
         flex.modules.attach({
             name            : 'ui.patterns',
             protofunction   : protofunction,
-            reference       : function () {
-                flex.libraries.events();
-                flex.libraries.binds();
-                flex.libraries.html();
-            },
+            reference       : ['flex.events', 'flex.html', 'flex.binds', 'flex.types.array'],
             onAfterAttach   : function () {
+                flex.libraries.events.      create();
+                flex.libraries.html.        create();
+                flex.libraries.binds.       create();
+                flex.libraries.types.array.create();
+                window['_patterns'] = flex.libraries.ui.patterns.create();
             }
         });
     }

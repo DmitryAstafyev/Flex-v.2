@@ -12,6 +12,11 @@
         //Declaration of modules
         /// <var>Collection of flex libraries</var>
         flex.libraries = {
+        };
+    }
+}());
+
+/*
             /// <field type = 'function'>Basic events controller</field>
             binds   : {  source: 'KERNEL::flex.binds.js',     },
             /// <field type = 'function'>Basic events controller</field>
@@ -56,7 +61,8 @@
                 /// <field type = 'function'>Extended array class</field>
                 array: { source: 'KERNEL::flex.types.array.js' }
             },
-            presentation: {  source: 'program/presentation.js', hash: 'HASHPROPERTY' },
-        };
-    }
-}());
+            program : {
+                presentation: {  source: 'program/presentation.js', hash: 'HASHPROPERTY' },
+            },
+
+*/

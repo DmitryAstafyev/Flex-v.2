@@ -1,6 +1,9 @@
-// LICENSE
-// This file (core / module) is released under the MIT License. See [LICENSE] file for details.
-/*global flex*/
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+* Copyright © 2015-2016 Dmitry Astafyev. All rights reserved.                                                      *
+* This file (core / module) is released under the Apache License (Version 2.0). See [LICENSE] file for details.    *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+ 
 /// <reference path='intellisense/flex.callers.node.intellisense.js' />
 /// <reference path='intellisense/flex.callers.nodes.intellisense.js' />
 /// <reference path='intellisense/flex.callers.object.intellisense.js' />
@@ -16,12 +19,12 @@
         var protofunction = function () { };
         protofunction.prototype = function () {
             /* Description
-             * data-flex-ui-window-resize-container="id"
-             *
-             * Next field isn't necessary and can be skipped. You should define it for situation, when container get his position form parent.
-             * For example container has top:50% from parent. In this case you should define such parent by next mark
-             * data-flex-ui-window-resize-position-parent="id"
-             * */
+                * data-flex-ui-window-resize-container="id"
+                *
+                * Next field isn't necessary and can be skipped. You should define it for situation, when container get his position form parent.
+                * For example container has top:50% from parent. In this case you should define such parent by next mark
+                * data-flex-ui-window-resize-position-parent="id"
+                * */
             var //Variables
                 privates        = null,
                 render          = null,
@@ -72,8 +75,9 @@
             };
             render          = {
                 position    : {
-                    getParent : function(id){
-                        return _node('*[' + settings.POSITION_PARENT + '="' + id + '"' + ']').target;
+                    getParent   : function (id) {
+                        var parent = _node('*[' + settings.POSITION_PARENT + '="' + id + '"' + ']');
+                        return parent !== null ? parent.target : null;
                     }
                 },
                 hooks       : {
@@ -280,19 +284,32 @@
             };
             patterns        = {
                 attach: function () {
-                    flex.events.core.listen(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, function (nodes) {
-                        var context = nodes.length !== void 0 ? (nodes.length > 0 ? nodes[0].parentNode : null) : null;
-                        if (context !== null) {
-                            if (_node('*[' + settings.CONTAINER + ']:not([' + settings.INITED + '])', false, context).target !== null) {
-                                init();
+                    if (flex.oop.namespace.get('flex.registry.events.ui.patterns.GROUP') !== null) {
+                        flex.events.core.listen(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, function (nodes) {
+                            var context = nodes.length !== void 0 ? (nodes.length > 0 ? nodes : null) : null;
+                            if (context !== null) {
+                                context.forEach(function (context) {
+                                    if (_node('*[' + settings.CONTAINER + ']:not([' + settings.INITED + '])', false, context).target !== null) {
+                                        init();
+                                    }
+                                });
                             }
-                        }
-                    });
+                        });
+                    }
                 }
             };
             privates = {
                 init : init
             };
+            (function () {
+                flex.registry.events.ui                 === void 0 && (flex.registry.events.ui = {});
+                flex.registry.events.ui.window          === void 0 && (flex.registry.events.ui.window = {});
+                flex.registry.events.ui.window.resize   === void 0 && (flex.registry.events.ui.window.resize = {
+                    GROUP   : 'flex.ui.window.resize',
+                    REFRESH : 'refresh',
+                    FINISH  : 'finish',
+                });
+            }());
             render.global.attach();
             patterns.attach();
             //Init modules
@@ -309,10 +326,7 @@
         flex.modules.attach({
             name            : 'ui.window.resize',
             protofunction   : protofunction,
-            reference       : function () {
-                flex.libraries.events   ();
-                flex.libraries.html     ();
-            }
+            reference       : ['flex.events', 'flex.html']
         });
     }
 }());
