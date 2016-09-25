@@ -47,17 +47,29 @@
             //Config
             config          = {
                 values      : {
-                    USE_STORAGE_CSS : true,
-                    USE_STORAGE_JS  : true,
-                    USE_STORAGE_HTML: true,
-                    PATTERN_NODE    : 'pattern',
-                    PATTERN_SRC     : 'data-pattern',
+                    USE_STORAGE_CSS     : true,
+                    USE_STORAGE_JS      : true,
+                    USE_STORAGE_HTML    : true,
+                    USE_LOCALSTORAGE    : true,
+                    PATTERN_NODE        : 'pattern',
+                    PATTERN_SRC         : 'data-pattern',
+                    HOOK_PREFIX         : 'h_',
+                    HOOKS_SET           : 'data-hooks',
+                    CACHE_PATTERNS      : false,
+                    onLayoutBuildFinish : null
                 },
                 validator   : {
-                    USE_STORAGE_CSS : function (value) { return typeof value === 'boolean' ? true : false;},
-                    USE_STORAGE_JS  : function (value) { return typeof value === 'boolean' ? true : false;},
-                    USE_STORAGE_HTML: function (value) { return typeof value === 'boolean' ? true : false;},
-                    PATTERN_NODE    : function (value) { return typeof value === 'string' ? (value.length > 0 ? (value.replace(/\w/gi, '').length === 0 ? true : false) : false) : false; },
+                    USE_STORAGE_CSS     : function (value) { return typeof value === 'boolean';},
+                    USE_STORAGE_JS      : function (value) { return typeof value === 'boolean';},
+                    USE_STORAGE_HTML    : function (value) { return typeof value === 'boolean';},
+                    USE_LOCALSTORAGE    : function (value) { return typeof value === 'boolean'; },
+                    PATTERN_SRC         : function (value) { return typeof value === 'string'; },
+                    PATTERN_NODE        : function (value) { return typeof value === 'string'   ? (value.length > 0 ? (value.replace(/\w/gi, '').length === 0 ? true : false) : false) : false; },
+                    PATTERN_SRC         : function (value) { return typeof value === 'string'; },
+                    HOOK_PREFIX         : function (value) { return typeof value === 'string'; },
+                    HOOKS_SET           : function (value) { return typeof value === 'string'; },
+                    CACHE_PATTERNS      : function (value) { return typeof value === 'boolean'; },
+                    onLayoutBuildFinish : function (value) { return typeof value === 'function'; },
                 },
                 setup       : function (_config) {
                     if (_config !== null && typeof _config === 'object') {
@@ -75,6 +87,8 @@
                     config.values.USE_STORAGE_CSS   = false;
                     config.values.USE_STORAGE_JS    = false;
                     config.values.USE_STORAGE_HTML  = false;
+                    config.values.USE_LOCALSTORAGE  = false;
+                    config.values.CACHE_PATTERNS    = false;
                     flex.config.set({
                         logs: { SHOW: ['CRITICAL', 'LOGICAL', 'WARNING', 'NOTIFICATION', 'LOGS', 'KERNEL_LOGS'] }
                     });
@@ -139,7 +153,6 @@
                     EVENT_BORDERS           : /\{\{\@|\}\}/gi,
                 },
                 storage         : {
-                    USE_LOCALSTORAGE        : true,
                     VIRTUAL_STORAGE_GROUP   : 'FLEX_UI_PATTERNS_GROUP',
                     VIRTUAL_STORAGE_ID      : 'FLEX_UI_PATTERNS_STORAGE',
                     CSS_ATTACHED_JOURNAL    : 'FLEX_UI_PATTERNS_CSS_JOURNAL',
@@ -151,7 +164,8 @@
                     HOOKS_STORAGE           : 'FLEX_PATTERNS_HOOKS_STORAGE',
                     MAPS_STORAGE            : 'FLEX_PATTERNS_MAPS_STORAGE',
                     PATTERN_SOURCES         : 'FLEX_PATTERNS_PATTERN_SOURCES',
-                    GLOBAL_EVENTS           : 'FLEX_PATTERNS_GLOBAL_EVENTS'
+                    GLOBAL_EVENTS           : 'FLEX_PATTERNS_GLOBAL_EVENTS',
+                    PATTERN_CACHE           : 'FLEX_PATTERNS_CACHE_STORAGE'
                 },
                 compatibility   : {
                     PARENT_TO_CHILD : {
@@ -193,16 +207,14 @@
                     SETINSTNCE  : 'setInstance'
                 },
                 other           : {
-                    INDEXES             : '__indexes',
-                    SUBLEVEL_BEGIN      : '_',
-                    SUBLEVEL_END        : '_',
-                    BIND_PREFIX         : '$$',
-                    DOM_PREFIX          : '$',
-                    PARENT_MARK_HTML    : '##parent##',
-                    ANCHOR              : 'ANCHOR::',
-                    EVENTS_HANDLE_ID    : 'flex_patterns_listener_handle_id',
-                    PATH                : '__path',
-                    PATTERN_TAG         : 'pattern'         
+                    SUBLEVEL_BEGIN          : '_',
+                    SUBLEVEL_END            : '_',
+                    BIND_PREFIX             : '$$',
+                    DOM_PREFIX              : '$',
+                    PARENT_MARK_HTML        : '##parent##',
+                    ANCHOR                  : 'ANCHOR::',
+                    EVENTS_HANDLE_ID        : 'flex_patterns_listener_handle_id',
+                    CACHE_PATTERNS_PREFIX   : 'PATTERNS_CACHE:'
                 }
             };
             logs            = {
@@ -227,6 +239,13 @@
                 },
                 controller  : {
                     CONTROLLER_DEFINED_MORE_THAN_ONCE       : '4000:CONTROLLER_DEFINED_MORE_THAN_ONCE',
+                },
+                layout      : {
+                    PATTERN_SRC_DEFINED_TWICE_OR_MORE       : '5000:PATTERN_SRC_DEFINED_TWICE_OR_MORE',
+                    PATTERN_SRC_OR_NAME_IS_TOO_SHORT        : '5001:PATTERN_SRC_OR_NAME_IS_TOO_SHORT',
+                    HOOK_SRC_DEFINED_TWICE_OR_MORE          : '5002:HOOK_SRC_DEFINED_TWICE_OR_MORE',
+                    HOOK_SRC_OR_NAME_IS_TOO_SHORT           : '5003:HOOK_SRC_OR_NAME_IS_TOO_SHORT',
+                    HOOK_CANNOT_BE_DEFINED_WITH_OTHER_TAGS  : '5004:HOOK_CANNOT_BE_DEFINED_WITH_OTHER_TAGS',
                 },
             };
             //Classes implementations
@@ -472,7 +491,7 @@
                             },
                         },
                         js  : {
-                            load: function (success, fail) {
+                            load    : function (success, fail) {
                                 var journal     = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.JS_ATTACHED_JOURNAL, {}),
                                     register_id = flex.unique();
                                 if (privates.js !== null && privates.js.length > 0) {
@@ -481,37 +500,48 @@
                                         privates.js,
                                         function (url) {
                                             var storaged    = null,
-                                                perf_id     = null;
+                                                perf_id     = null,
+                                                _success    = function _success() {
+                                                    flex.overhead.register.done(register_id, url);
+                                                    var request = flex.ajax.send(
+                                                        url,
+                                                        flex.ajax.methods.GET,
+                                                        null,
+                                                        {
+                                                            success: function (response, request) {
+                                                                storage.add(url, response.original);
+                                                            },
+                                                        }
+                                                    );
+                                                    request.send();
+                                                    measuring.measure(perf_id, 'loading resources for (' + self.url + '):: ' + url);
+                                                },
+                                                _fail       = function _fail() {
+                                                    flex.logs.log(signature() + logs.source.FAIL_TO_LOAD_JS_RESOURCE, flex.logs.types.CRITICAL);
+                                                    measuring.measure(perf_id, 'loading resources for (' + self.url + '):: ' + url);
+                                                    callback(fail);
+                                                    throw logs.source.FAIL_TO_LOAD_JS_RESOURCE;
+                                                };
                                             if (journal[url] === void 0) {
                                                 controllers.references.assign(url, self.url);
                                                 journal[url]    = true;
                                                 storaged        = storage.get(url);
                                                 if (storaged === null || config.get().USE_STORAGE_JS === false) {
                                                     perf_id = measuring.measure();
-                                                    flex.resources.attach.js.connect(
-                                                        url,
-                                                        function () {
+                                                    if (Source.resource.isIn(url)) {
+                                                        if (Source.resource.isDone(url)) {
                                                             flex.overhead.register.done(register_id, url);
-                                                            var request = flex.ajax.send(
-                                                                url,
-                                                                flex.ajax.methods.GET,
-                                                                null,
-                                                                {
-                                                                    success: function (response, request) {
-                                                                        storage.add(url, response.original);
-                                                                    },
-                                                                }
-                                                            );
-                                                            request.send();
-                                                            measuring.measure(perf_id, 'loading resources for (' + self.url + '):: ' + url);
-                                                        },
-                                                        function () {
-                                                            flex.logs.log(signature() + logs.source.FAIL_TO_LOAD_JS_RESOURCE, flex.logs.types.CRITICAL);
-                                                            measuring.measure(perf_id, 'loading resources for (' + self.url + '):: ' + url);
-                                                            callback(fail);
-                                                            throw logs.source.FAIL_TO_LOAD_JS_RESOURCE;
+                                                        } else {
+                                                            Source.resource.add(url, function () {
+                                                                flex.overhead.register.done(register_id, url);
+                                                            });
                                                         }
-                                                    );
+                                                    } else {
+                                                        Source.resource.add(url, _success);
+                                                        flex.resources.attach.js.connect(url, function () {
+                                                            Source.resource.done(url);
+                                                        }, _fail);
+                                                    }
                                                 } else {
                                                     controllers.current.set(url);
                                                     flex.resources.attach.js.adoption(storaged, function () {
@@ -521,7 +551,13 @@
                                                     storage.add(url, storaged);
                                                 }
                                             } else {
-                                                flex.overhead.register.done(register_id, url);
+                                                if (Source.resource.isDone(url)) {
+                                                    flex.overhead.register.done(register_id, url);
+                                                } else {
+                                                    Source.resource.add(url, function () {
+                                                        flex.overhead.register.done(register_id, url);
+                                                    });
+                                                }
                                             }
                                         }
                                     );
@@ -934,9 +970,11 @@
                         },
                         events      : {
                             find: function () {
-                                var tags = processing.tags.get(),
-                                    regs = settings.regs,
-                                    all  = [];
+                                var tags        = processing.tags.get(),
+                                    regs        = settings.regs,
+                                    all         = [],
+                                    hash        = helpers.getHash(self.url).replace('-', '0'),
+                                    ID_index    = 0;
                                 tags.forEach(function (tag, index) {
                                     var attrs   = tag.mod.match(regs.EVENT_ATTR),
                                         events  = [];
@@ -946,7 +984,7 @@
                                             content.length === 2 && events.push({
                                                 event   : content[0].replace(/^on/i, ''),
                                                 handle  : content[1],
-                                                id      : flex.unique(),
+                                                id      : hash + ID_index++,
                                                 attr    : attr
                                             });
                                         });
@@ -972,7 +1010,7 @@
                                 privates.map.events = all;
                             }
                         },
-                        procced : function (){
+                        procced     : function (){
                             processing.fix();
                             processing.hooks.find();
                             processing.events.find();
@@ -1080,6 +1118,35 @@
                         return storage[url] !== void 0 ? storage[url] : null;
                     },
                 },
+                resource    : {
+                    add : function (url, callback) {
+                        Source.resource.data === void 0 && (Source.resource.data = {});
+                        if (Source.resource.data[url] === void 0) {
+                            Source.resource.data[url] = { handles : [], status: false };
+                        }
+                        Source.resource.data[url].handles.push(callback);
+                    },
+                    done: function (url) {
+                        Source.resource.data        === void 0 && (Source.resource.data             = {});
+                        Source.resource.data[url]   !== void 0 && (Source.resource.data[url].status = true);
+                        _object(Source.resource.data).forEach(function (url, source) {
+                            if (source.status) {
+                                source.handles.forEach(function (callback) {
+                                    callback();
+                                });
+                                source.handles  = [];
+                            }
+                        });
+                    },
+                    isDone: function (url) {
+                        Source.resource.data === void 0 && (Source.resource.data = {});
+                        return Source.resource.data[url] !== void 0 ? Source.resource.data[url].status : false;
+                    },
+                    isIn: function (url) {
+                        Source.resource.data === void 0 && (Source.resource.data = {});
+                        return Source.resource.data[url] !== void 0;
+                    }
+                },
                 init        : function (url, success, fail) {
                     var urls        = url instanceof Array ? url : [url],
                         journal     = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PRELOAD_TRACKER, {}),
@@ -1131,6 +1198,7 @@
                         methods     = null,
                         signature   = null,
                         returning   = null,
+                        hash        = null,
                         consts      = {
                             maps: {
                                 MODEL   : 'model',
@@ -1181,7 +1249,7 @@
                                             url         : val,
                                             hooks       : {},
                                             events      : src !== null ? src.map().events : null,
-                                            controller  : caller.controller !== null ? caller.controller : controllers.storage.get(val),
+                                            controller  : controller.convert(caller.controller, val),
                                             path        : path
                                         };
                                     }
@@ -1217,7 +1285,7 @@
                                 url         : self.url,
                                 hooks       : map,
                                 events      : self.source.map().events,
-                                controller  : privates.caller.controller !== null ? privates.caller.controller : controllers.storage.get(self.url),
+                                controller  : privates.controller,
                                 path        : ''
                             };
                         }
@@ -1799,28 +1867,39 @@
                             var parent      = typeof parent === 'string' ? parent : false,
                                 conditions  = conditions instanceof Object ? conditions : false,
                                 res         = '',
-                                original    = self.source.html(parent),
+                                original    = null,
                                 regs        = settings.regs,
                                 _cache      = cache.reset().regs,
-                                fragments   = [];
-                            if (helpers.isArray(privates.hooks)) {
-                                html.cache.load(parent, conditions);
-                                privates.hooks.forEach(function (_hooks, index) {
-                                    var fragment = original;
-                                    _object(_hooks).forEach(function (name, value) {
-                                        var _name   = (!parent ? '' : parent + '.') + name,
-                                            _res    = html.getHTML(parent, name, value, index);
-                                        _cache[_name]   = _cache[_name] === void 0 ? new RegExp(regs.HOOK_OPEN + _name.replace(/\./gi,'\\.') + regs.HOOK_CLOSE, 'gi') : _cache[_name];
-                                        fragment        = _res !== false ? fragment.replace(_cache[_name], _res.html) : fragment;
-                                        fragment        = _res !== false ? fragment : hooks.insert(_name, value, fragment);
+                                fragments   = [],
+                                cached      = hash.getCache();
+                            if (cached === null) {
+                                original = self.source.html(parent);
+                                if (helpers.isArray(privates.hooks)) {
+                                    html.cache.load(parent, conditions);
+                                    privates.hooks.forEach(function (_hooks, index) {
+                                        var fragment = original;
+                                        _object(_hooks).forEach(function (name, value) {
+                                            var _name   = (!parent ? '' : parent + '.') + name,
+                                                _res    = html.getHTML(parent, name, value, index);
+                                            _cache[_name]   = _cache[_name] === void 0 ? new RegExp(regs.HOOK_OPEN + _name.replace(/\./gi,'\\.') + regs.HOOK_CLOSE, 'gi') : _cache[_name];
+                                            fragment        = _res !== false ? fragment.replace(_cache[_name], _res.html) : fragment;
+                                            fragment        = _res !== false ? fragment : hooks.insert(_name, value, fragment);
+                                        });
+                                        fragment    = condition.html(fragment, condition.getByPath(!parent ? '' : parent, conditions), _hooks, parent);
+                                        res         += fragment;
+                                        fragments.push(fragment);
                                     });
-                                    fragment    = condition.html(fragment, condition.getByPath(!parent ? '' : parent, conditions), _hooks, parent);
-                                    res         += fragment;
-                                    fragments.push(fragment);
+                                }
+                                privates.html = res !== '' ? res : original;
+                                hash.setCache({
+                                    html        : privates.html,
+                                    fragments   : fragments.length === 0 ? [original] : fragments,
                                 });
+                                return fragments.length === 0 ? [original] : fragments;
+                            } else {
+                                privates.html = cached.html;
+                                return cached.fragments;
                             }
-                            privates.html = res !== '' ? res : original;
-                            return fragments.length === 0 ? [original] : fragments;
                         },
                         wrap        : function () {
                             privates.wrapper            = helpers.getPattern(privates.html);
@@ -2241,8 +2320,17 @@
                         }
                     };
                     controller  = {
+                        convert     : function (controller, url){
+                            controller = controller !== null ? controller : controllers.storage.get(url);
+                            if (controller instanceof Function && (controller.prototype[settings.events.ONREADY] !== void 0 || controller.prototype[settings.events.ONUPDATE] !== void 0 || controller.prototype[settings.events.SETINSTNCE] !== void 0)) {
+                                return new controller(privates.__instance);
+                            } else {
+                                return controller;
+                            }
+                        },
                         init        : function () {
-                            privates.listener = privates.listener === null ? new addition.listener.create(privates.__instance) : privates.listener;
+                            privates.controller = controller.convert(privates.caller.controller, self.url);
+                            privates.listener   = privates.listener === null ? new addition.listener.create(privates.__instance) : privates.listener;
                         },
                         events      : function () {
                             function process(refs, controllers) {
@@ -2284,7 +2372,7 @@
                                             });
                                         });
                                     }
-                                    if (refs.hooks !== void 0 && typeof refs.hooks === 'object') {
+                                    if (refs.hooks !== void 0 && typeof refs.hooks === 'object' && refs.hooks !== null) {
                                         _object(refs.hooks).forEach(function (prop, val) {
                                             process(val, controllers.filter(function () { return true;}));
                                         });
@@ -2329,8 +2417,8 @@
                             }
                             process(privates.hooks,
                                     privates.map.model,
-                                    privates.caller.controller  === null ? controllers.storage.get(self.url)    : privates.caller.controller,
-                                    privates.caller.exchange    === null ? null                                 : privates.caller.exchange);
+                                    privates.controller,
+                                    privates.caller.exchange === null ? null : privates.caller.exchange);
                         },
                         handle      : function (handle, model, exchange, update) {
                             function call(handle, _this) {
@@ -2373,6 +2461,63 @@
                             return privates.cache;
                         },
                     };
+                    hash        = {
+                        getString   : function () {
+                            function toString(obj) {
+                                var _obj = null;
+                                if (helpers.isArray(obj)) {
+                                    return obj.map(function (obj) {
+                                        return toString(obj);
+                                    });
+                                } else if (obj instanceof settings.classes.CALLER) {
+                                    return {
+                                        url     : obj.url,
+                                        hooks   : toString(obj.hooks)
+                                    };
+                                } else if (typeof obj === 'object') {
+                                    _obj = {};
+                                    _object(obj).forEach(function (prop, obj) {
+                                        _obj[prop] = toString(obj);
+                                    });
+                                    return _obj;
+                                } else {
+                                    return obj;
+                                }
+                            };
+                            var res = {
+                                url     : self.url,
+                                hooks   : toString(privates.hooks)
+                            };
+                            return JSON.stringify(res);
+                        },
+                        setHash     : function () {
+                            privates.hash = config.get().CACHE_PATTERNS ? (settings.other.CACHE_PATTERNS_PREFIX + helpers.getHash(hash.getString())): null;
+                        },
+                        getCache    : function (){
+                            var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PATTERN_CACHE, {}),
+                                target  = null;
+                            if (config.get().CACHE_PATTERNS && privates.hash !== void 0 && privates.hash !== null) {
+                                if (storage === null || storage[privates.hash] === void 0) {
+                                    target = flex.localStorage.getJSON(privates.hash);
+                                    if (target !== null) {
+                                        storage[privates.hash] = target;
+                                        return _object(storage[privates.hash]).copy();
+                                    } else {
+                                        return null;
+                                    }
+                                } else if (storage[privates.hash] !== void 0) {
+                                    return _object(storage[privates.hash]).copy();
+                                }
+                            } else {
+                                return null;
+                            }
+                        },
+                        setCache    : function (obj) {
+                            if (config.get().CACHE_PATTERNS && privates.hash !== void 0 && privates.hash !== null) {
+                                flex.localStorage.addJSON(privates.hash, obj);
+                            }
+                        }
+                    };
                     methods     = {
                         make    : function (update){
                             var update = typeof update === 'boolean' ? update : false;
@@ -2385,14 +2530,15 @@
                             model.finalize();
                             dom.indexes();
                             condition.apply();
-                            controller.init();
                             controller.apply(update);
                             controller.events();
                             html.map();
                         },
                         build   : function () {
                             cache.reset();
+                            hash.setHash();
                             condition.find();
+                            controller.init();
                             mapping.refs();
                             methods.make(false);
                             controller.handle(privates.caller.onReady, privates.map.model, privates.caller.exchange);
@@ -2402,7 +2548,7 @@
                             };
                         },
                         update  : function (hooks){
-                            function getHooks(src, org, refs){
+                            function getHooks(src, org, refs) {
                                 var _hooks = [];
                                 if (helpers.isArray(src) && helpers.isArray(org)) {
                                     if (src.length !== org.length) {
@@ -2598,6 +2744,7 @@
                             flex.oop.namespace.get('flex.libraries.ui.window.resize'    ) !== null && flex.libraries.ui.window.resize.  create();
                             flex.oop.namespace.get('flex.libraries.ui.window.maximize'  ) !== null && flex.libraries.ui.window.maximize.create();
                         }
+                        layout.init(true, self.url);
                         flex.events.core.fire(flex.registry.events.ui.patterns.GROUP, flex.registry.events.ui.patterns.MOUNTED, context);
                     };
                     unmount     = function () {
@@ -3119,24 +3266,131 @@
                 }
             };
             layout          = {
-                init    : function (is_auto){
-                    function isValid(pattern) {
-                        var nodeName = pattern.parentNode.nodeName.toLowerCase();
-                        if (nodeName !== config.get().PATTERN_NODE) {
-                            if (nodeName !== 'body'){
-                                return isValid(pattern.parentNode);
-                            } else {
-                                return true;
+                journal: {
+                    data    : [],
+                    add     : function (url) {
+                        layout.journal.data.push(flex.system.url.restore(url));
+                    },
+                    done    : function (url) {
+                        var index = layout.journal.data.indexOf(url);
+                        index !== -1 && (layout.journal.data.splice(index, 1));
+                        if (layout.journal.data.length === 0) {
+                            if (typeof config.get().onLayoutBuildFinish === 'function' && config.get().onLayoutBuildFinish.started === void 0) {
+                                config.get().onLayoutBuildFinish.started = true;
+                                config.get().onLayoutBuildFinish();
                             }
-                        } else {
-                            return false;
                         }
-                    };
+                    }
+                },
+                getScheme   : function(){
+                    var patterns = null,
+                        scheme   = null;
+                    layout.getScheme.scheme === void 0 && (layout.getScheme.scheme = {});
+                    scheme = layout.getScheme.scheme;
+                    if (Object.keys(scheme).length === 0) {
+                        patterns = _nodes('link[rel="' + config.get().PATTERN_NODE + '"]').target;
+                        if (patterns !== null && patterns instanceof NodeList && patterns.length > 0) {
+                            Array.prototype.forEach.call(patterns, function (pattern) {
+                                var name        = null,
+                                    src         = null,
+                                    hooks_set   = null;
+                                if (pattern.hasAttribute('name') && pattern.hasAttribute('src')) {
+                                    name        = pattern.getAttribute('name').toLowerCase();
+                                    src         = pattern.getAttribute('src');
+                                    hooks_set   = pattern.hasAttribute(config.get().HOOKS_SET) ? pattern.getAttribute(config.get().HOOKS_SET) : '';
+                                    if (name.length > 0 && src.length > 0 && scheme[name] === void 0) {
+                                        scheme[name] = {
+                                            name        : name,
+                                            src         : src,
+                                            hooks_set   : hooks_set
+                                        };
+                                    } else {
+                                        if (scheme[name] !== void 0) {
+                                            flex.logs.log(logs.layout.PATTERN_SRC_DEFINED_TWICE_OR_MORE, flex.logs.types.WARNING);
+                                        } else {
+                                            flex.logs.log(logs.layout.PATTERN_SRC_OR_NAME_IS_TOO_SHORT, flex.logs.types.WARNING);
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    return scheme;
+                },
+                getHooksMap : function(){
+                    var hooks   = null,
+                        map     = null;
+                    layout.getHooksMap.map === void 0 && (layout.getHooksMap.map = {});
+                    map = layout.getHooksMap.map;
+                    if (Object.keys(map).length === 0) {
+                        hooks = _nodes('link[rel="hook"]').target;
+                        if (hooks !== null && hooks instanceof NodeList && hooks.length > 0) {
+                            Array.prototype.forEach.call(hooks, function (hook) {
+                                var name    = null,
+                                    src     = null;
+                                if (hook.hasAttribute('name') && hook.hasAttribute('src')) {
+                                    name    = hook.getAttribute('name').toLowerCase();
+                                    src     = hook.getAttribute('src');
+                                    if (name.length > 0 && src.length > 0 && map[name] === void 0) {
+                                        map[name] = {
+                                            name: name,
+                                            src : src
+                                        };
+                                    } else {
+                                        if (map[name] !== void 0) {
+                                            flex.logs.log(logs.layout.HOOK_SRC_DEFINED_TWICE_OR_MORE, flex.logs.types.WARNING);
+                                        } else {
+                                            flex.logs.log(logs.layout.HOOK_SRC_OR_NAME_IS_TOO_SHORT, flex.logs.types.WARNING);
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    return map;
+                },
+                initByScheme: function (is_auto) {
+                    var scheme  = layout.getScheme(),
+                        nodes   = [];
+                    if (Object.keys(scheme).length > 0) {
+                        _object(scheme).forEach(function (prop, val) {
+                            var patterns = _nodes(prop).target;
+                            if (patterns !== null && patterns instanceof NodeList && patterns.length > 0) {
+                                Array.prototype.forEach.call(patterns, function (pattern, index) {
+                                    if (pattern.__in_work === void 0 && !layout.helpers.isNested(pattern)) {
+                                        pattern.__in_work = true;
+                                        layout.journal.add(val.src);
+                                        nodes.push({
+                                            node    : pattern,
+                                            scheme  : val
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                        nodes.forEach(function (pattern) {
+                            pattern.node.setAttribute(config.get().PATTERN_SRC, pattern.scheme.src);
+                            !pattern.node.hasAttribute(config.get().HOOKS_SET) && pattern.node.setAttribute(config.get().HOOKS_SET, pattern.scheme.hooks_set);
+                            if (!pattern.node.hasAttribute(settings.events.ONREADY) || !is_auto) {
+                                layout.caller(pattern.node);
+                            }
+                        });
+                    }
+                },
+                initByHTML  : function (is_auto){
                     var patterns    = _nodes(config.get().PATTERN_NODE).target,
-                        is_auto     = typeof is_auto === 'boolean' ? is_auto : false;
+                        is_auto     = typeof is_auto === 'boolean' ? is_auto : false,
+                        nodes       = [];
                     if (patterns !== null && patterns instanceof NodeList && patterns.length > 0) {
                         Array.prototype.forEach.call(patterns, function (pattern) {
-                            if (isValid(pattern)) {
+                            if (pattern.__in_work === void 0 && !layout.helpers.isNested(pattern) && pattern.hasAttribute(config.get().PATTERN_SRC)) {
+                                pattern.__in_work = true;
+                                layout.journal.add(pattern.getAttribute(config.get().PATTERN_SRC));
+                                nodes.push(pattern);
+                            }
+                        });
+                        nodes.forEach(function (pattern) {
+                            if (!layout.helpers.isNested(pattern)) {
                                 if (!pattern.hasAttribute(settings.events.ONREADY) || !is_auto) {
                                     layout.caller(pattern);
                                 }
@@ -3144,7 +3398,12 @@
                         });
                     }
                 },
-                caller  : function (pattern, is_child) {
+                init        : function (is_auto, url){
+                    layout.initByScheme(is_auto);
+                    layout.initByHTML(is_auto);
+                    url !== void 0 && (layout.journal.done(url));
+                },
+                caller      : function (pattern, is_child, path, hooks_set) {
                     function getIndex(source, hook) {
                         var index = -1;
                         try{
@@ -3175,16 +3434,38 @@
                             return null;
                         }
                     };
-                    var _caller     = null,
-                        is_child    = is_child !== void 0 ? is_child : false,
-                        url         = null;
-                    _caller = {
-                        url     : pattern.hasAttribute(config.get().PATTERN_SRC) ? pattern.getAttribute(config.get().PATTERN_SRC) : null,
-                        hooks   : {}
+                    function hasHooks(pattern, url, hooks_set) {
+                        var status = -1;
+                        if (pattern.children !== void 0 && pattern.children.length > 0) {
+                            Array.prototype.forEach.call(pattern.children, function (child) {
+                                var hook    = child.nodeName.toLowerCase(),
+                                    is_hook = hook.indexOf(config.get().HOOK_PREFIX) === 0 ? true : (hooks_set.indexOf(hook) !== -1);
+                                status = status === -1 ? is_hook : (status ? (!is_hook ? null : status) : (is_hook ? null : status));
+                                if (status === null) {
+                                    flex.logs.log(logs.layout.HOOK_CANNOT_BE_DEFINED_WITH_OTHER_TAGS + ' (' + url + ')', flex.logs.types.CRITICAL);
+                                    throw new Error(logs.layout.HOOK_CANNOT_BE_DEFINED_WITH_OTHER_TAGS + ' (' + url + ')');
+                                }
+                            });
+                        }
+                        status === -1 && (status = false);
+                        return status;
                     };
-                    Array.prototype.forEach.call(pattern.children, function (child) {
+                    function getHookName(nodeName) {
+                        return nodeName.indexOf(config.get().HOOK_PREFIX) === 0 ? nodeName.replace(config.get().HOOK_PREFIX, '') : nodeName;
+                    };
+                    function getHooksSet(pattern) {
+                        var hooks_set = pattern.hasAttribute(config.get().HOOKS_SET) ? pattern.getAttribute(config.get().HOOKS_SET) : [];
+                        if (typeof hooks_set === 'string') {
+                            hooks_set = hooks_set.split(',');
+                            hooks_set = hooks_set.map(function (hook) {
+                                return hook.replace(/\s/gi, '');
+                            });
+                        }
+                        return hooks_set;
+                    };
+                    function processing(child, hook) {
                         var index   = 0,
-                            hook    = child.nodeName.toLowerCase();
+                            hook    = hook === void 0 ? getHookName(child.nodeName.toLowerCase()) : hook;
                         if (_caller.hooks[hook] !== void 0 && !(_caller.hooks instanceof Array)) {
                             _caller.hooks = [_caller.hooks];
                         }
@@ -3194,19 +3475,38 @@
                                 _caller.hooks.push({});
                                 index = _caller.hooks.length - 1;
                             }
-                            if (child.children.length === 0) {
+                            if (!hasHooks(child, _caller.url, hooks_set)) {
                                 _caller.hooks[index][hook] = child.innerHTML;
                             } else {
-                                _caller.hooks[index][hook] = layout.caller(child, true);
+                                _caller.hooks[index][hook] = layout.caller(child, true, path + (path === '' ? '' : '.') + hook, hooks_set);
                             }
                         } else {
-                            if (child.children.length === 0) {
+                            if (!hasHooks(child, _caller.url, hooks_set)) {
                                 _caller.hooks[hook] = child.innerHTML;
                             } else {
-                                _caller.hooks[hook] = layout.caller(child, true);
+                                _caller.hooks[hook] = layout.caller(child, true, path + (path === '' ? '' : '.') + hook, hooks_set);
                             }
                         }
-                    });
+                    };
+                    var _caller     = null,
+                        is_child    = is_child !== void 0 ? is_child : false,
+                        path        = path !== void 0 ? path : pattern.nodeName.toLowerCase(),
+                        url         = null,
+                        map         = layout.getHooksMap(),
+                        single      = hooks_set instanceof Array ? false : true,
+                        hooks_set   = hooks_set instanceof Array ? hooks_set.concat(getHooksSet(pattern)) : getHooksSet(pattern);
+                    single  = single ? (hooks_set.length === 1 ? hooks_set[0] : false) : false;
+                    _caller = {
+                        url     : pattern.hasAttribute(config.get().PATTERN_SRC) ? pattern.getAttribute(config.get().PATTERN_SRC) : (map[path] !== void 0 ? map[path].src : null),
+                        hooks   : {}
+                    };
+                    if (single !== false && !hasHooks(pattern, _caller.url, hooks_set)) {
+                        processing(pattern, single);
+                    } else {
+                        Array.prototype.forEach.call(pattern.children, function (child) {
+                            processing(child);
+                        });
+                    }
                     if (typeof _caller.hooks === 'object' && Object.keys(_caller.hooks).length === 0) {
                         delete _caller.hooks;
                     }
@@ -3224,13 +3524,25 @@
                     }
                     return _caller.hooks;
                 },
-                attach  : function () {
+                attach      : function () {
                     if (document.readyState !== 'complete') {
                         flex.events.DOM.add(window, 'load', function () {
                             layout.init(true);
                         });
                     } else {
                         layout.init(true);
+                    }
+                },
+                helpers     : {
+                    isNested: function (pattern) {
+                        var nodeName    = null,
+                            scheme      = layout.getScheme();
+                        if (pattern.parentNode !== void 0 && pattern.parentNode !== null) {
+                            nodeName = pattern.parentNode.nodeName.toLowerCase();
+                            return nodeName === config.get().PATTERN_NODE.toLowerCase() ? true : (scheme[nodeName] !== void 0 ? true : (nodeName === 'body' ? false : layout.helpers.isNested(pattern.parentNode)));
+                        } else {
+                            return false;
+                        }
                     }
                 }
             };
@@ -3306,7 +3618,7 @@
                 },
                 local   : {
                     add: function (url, content) {
-                        if (settings.storage.USE_LOCALSTORAGE === true) {
+                        if (config.get().USE_LOCALSTORAGE === true) {
                             return flex.localStorage.addJSON(url, {
                                 html: content,
                                 hash: flex.hashes.get(url)
@@ -3315,15 +3627,25 @@
                         return false;
                     },
                     get: function (url) {
+                        function resetPatternsCache() {
+                            if (storage.local.resetPatternsCache === void 0) {
+                                flex.localStorage.reset(settings.other.CACHE_PATTERNS_PREFIX);
+                                storage.local.resetPatternsCache = true;
+                            }
+                        };
                         var target = null;
-                        if (settings.storage.USE_LOCALSTORAGE === true) {
+                        if (config.get().USE_LOCALSTORAGE === true) {
                             flex.hashes.update(url);
                             target = flex.localStorage.getJSON(url);
                             if (target !== null) {
                                 if (target.hash === flex.hashes.get(url)) {
                                     return target.html;
+                                } else {
+                                    resetPatternsCache();
                                 }
                             }
+                        } else {
+                            resetPatternsCache();
                         }
                         return null;
                     }
@@ -3338,7 +3660,7 @@
                         result = storage.local.get(url);
                     }
                     return result;
-                }
+                },
             };
             measuring       = {
                 measure: (function () {
@@ -3549,6 +3871,17 @@
                         return getParent(tag);
                     }
                     return null;
+                },
+                getHash     : function (str){
+                    //Source: http://werxltd.com/wp/2010/05/13/javascript-implementation-of-javas-string-hashcode-method/
+                    var hash = 0, i, chr, len;
+                    if (str.length === 0) return hash;
+                    for (i = 0, len = str.length; i < len; i++) {
+                        chr = str.charCodeAt(i);
+                        hash = ((hash << 5) - hash) + chr;
+                        hash |= 0; // Convert to 32bit integer
+                    }
+                    return hash.toString();
                 }
             };
             callers         = {

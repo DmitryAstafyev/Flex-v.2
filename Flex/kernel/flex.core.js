@@ -5178,6 +5178,7 @@
                 del     : system.localStorage.del,
                 addJSON : system.localStorage.setJSON,
                 getJSON : system.localStorage.getJSON,
+                reset   : system.localStorage.reset,
             },
             hashes          : {
                 get     : hashes.get,
@@ -5281,6 +5282,7 @@
                 del     : privates.localStorage.del,
                 addJSON : privates.localStorage.addJSON,
                 getJSON : privates.localStorage.getJSON,
+                reset   : privates.localStorage.reset,
             },
             system          : {
                 handle      : privates.system.handle,
