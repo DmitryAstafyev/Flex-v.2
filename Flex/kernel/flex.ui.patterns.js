@@ -15,10 +15,6 @@
 /// </module>
 (function () {
     "use strict";
-    /*TODO:
-    - save ready template as object (with marks only) - is it possible?
-    - add modele, DOM, resources into controller
-    */
     if (flex !== void 0) {
         var protofunction = function () { };
         protofunction.prototype = function () {
@@ -55,6 +51,8 @@
                     PATTERN_SRC         : 'data-pattern',
                     HOOK_PREFIX         : 'h_',
                     HOOKS_SET           : 'data-hooks',
+                    HOOKS_SRC           : 'data-hooks-src',
+                    ACCESSORS           : true,
                     CACHE_PATTERNS      : false,
                     onLayoutBuildFinish : null
                 },
@@ -68,6 +66,8 @@
                     PATTERN_SRC         : function (value) { return typeof value === 'string'; },
                     HOOK_PREFIX         : function (value) { return typeof value === 'string'; },
                     HOOKS_SET           : function (value) { return typeof value === 'string'; },
+                    HOOKS_SRC           : function (value) { return typeof value === 'string'; },
+                    ACCESSORS           : function (value) { return typeof value === 'boolean'; },
                     CACHE_PATTERNS      : function (value) { return typeof value === 'boolean'; },
                     onLayoutBuildFinish : function (value) { return typeof value === 'function'; },
                 },
@@ -103,6 +103,7 @@
                     SOURCE  : function(){},
                     PATTERN : function(){},
                     CALLER  : function(){},
+                    URL     : function(){},
                 },
                 regs            : {
                     BODY                    : /<\s*body[^>]*>(\n|\r|\s|.)*?<\s*\/body\s*>/gi,
@@ -128,11 +129,10 @@
                     HOOK_OPEN               : '\\{\\{',
                     HOOK_CLOSE              : '\\}\\}',
                     HOOK_BORDERS            : /\{\{|\}\}/gi,
-                    CONDITIONS              : /<!--[\w_]*=.{1,}-->/gi,
-                    CONDITION_CONTENT       : '<!--[open]-->(\\n|\\r|\\s|.)*?<!--[close]-->',
-                    CONDITION_CONTENT_ANY   : '<!--[open]=.{1,}-->(\\n|\\r|\\s|.)*?<!--[close]-->',
+                    CONDITIONS              : /<!--[\w_]*=.{1,}?-->/gi,
+                    CONDITION_CONTENT       : '<!--[open]-->.*?<!--[close]-->',
+                    CONDITION_CONTENT_ANY   : '<!--[open]=.{1,}?-->.*?<!--[close]-->',
                     STRING_CON              : /".*?"/gi,
-                    STRING_CON_STR          : '".*"',
                     STRING_CON_STRICT       : '".*?"',
                     STRING_BORDER_CON       : /"/gi,
                     CON_CLOSE_STR           : '<!--[name]-->',
@@ -151,6 +151,10 @@
                     INSIDE_TAG              : />(.*?)</gi,
                     EVENT_ATTR              : /[\w]{1,}(\s{1,})?=(\s{1,})?["']\{\{\@[\w\d_\.]*?\}\}["']/gi,
                     EVENT_BORDERS           : /\{\{\@|\}\}/gi,
+                    LINES                   : /\n|\r|\n\r/gi,
+                    COLLECTION_HOOK_TAG     : /<[^>]*?\{\{\[[\w\d_\.]*?\]\}\}/i,    //Should not be global
+                    COLLECTION_HOOK_NAME    : /{\{\[[\w\d_\.]*?\]\}\}/i,            //Should not be global
+                    COLLECTION_BORDERS      : /{\{\[|\]\}\}/gi,
                 },
                 storage         : {
                     VIRTUAL_STORAGE_GROUP   : 'FLEX_UI_PATTERNS_GROUP',
@@ -164,6 +168,7 @@
                     HOOKS_STORAGE           : 'FLEX_PATTERNS_HOOKS_STORAGE',
                     MAPS_STORAGE            : 'FLEX_PATTERNS_MAPS_STORAGE',
                     PATTERN_SOURCES         : 'FLEX_PATTERNS_PATTERN_SOURCES',
+                    PATTERN_SOURCES_HTML    : 'FLEX_PATTERNS_PATTERN_SOURCES_HTML',
                     GLOBAL_EVENTS           : 'FLEX_PATTERNS_GLOBAL_EVENTS',
                     PATTERN_CACHE           : 'FLEX_PATTERNS_CACHE_STORAGE'
                 },
@@ -204,6 +209,7 @@
                 events          : {
                     ONREADY     : 'onReady',
                     ONUPDATE    : 'onUpdate',
+                    ONCHANGE    : 'onChange',
                     SETINSTNCE  : 'setInstance'
                 },
                 other           : {
@@ -211,10 +217,14 @@
                     SUBLEVEL_END            : '_',
                     BIND_PREFIX             : '$$',
                     DOM_PREFIX              : '$',
+                    ACCESSOR_PREFIX         : '__',
+                    HOOK_COM_BEGIN          : '^^^',
+                    HOOK_COM_END            : '###',
                     PARENT_MARK_HTML        : '##parent##',
                     ANCHOR                  : 'ANCHOR::',
                     EVENTS_HANDLE_ID        : 'flex_patterns_listener_handle_id',
-                    CACHE_PATTERNS_PREFIX   : 'PATTERNS_CACHE:'
+                    CACHE_PATTERNS_PREFIX   : 'PATTERNS_CACHE:',
+                    HOOK_ACCESSOR_FUNC_NAME : 'setHookValue'
                 }
             };
             logs            = {
@@ -228,11 +238,15 @@
                     BAD_FORMAT_OF_STYLE_IN_ATTRIBUTE        : '0006: BAD_FORMAT_OF_STYLE_IN_ATTRIBUTE',
                     ONLY_ONE_MODEL_REF_CAN_BE_IN_STYLE_PROP : '0007: ONLY_ONE_MODEL_REF_CAN_BE_IN_STYLE_PROP',
                     FAIL_TO_LOAD_PATTERN_IN_COMPONENT       : '0008: FAIL_TO_LOAD_PATTERN_IN_COMPONENT',
+                    COLLECTION_HOOK_IS_WRONG                : '0009: COLLECTION_HOOK_IS_WRONG',
                 },
                 pattern     : {
                     CANNOT_FIND_SOURCE_OF_TEMPLATE          : '1000:CANNOT_FIND_SOURCE_OF_TEMPLATE',
                     CANNOT_DETECT_HOOK_VALUE                : '1001:CANNOT_DETECT_HOOK_VALUE',
                     CANNOT_DETECT_HOOK_ANCHOR               : '1002:CANNOT_DETECT_HOOK_ANCHOR',
+                    TEXT_HOOK_VALUE_CANBE_ONLY_TEXT         : '1003:TEXT_HOOK_VALUE_CANBE_ONLY_TEXT',
+                    CANNOT_DETECT_HTML                      : '1004:CANNOT_DETECT_HTML',
+                    CANNOT_DETECT_BEGIN_OR_END_HOOK_ANC     : '1005:CANNOT_DETECT_BEGIN_OR_END_HOOK_ANC',
                 },
                 caller      : {
                     CANNOT_INIT_PATTERN                     : '3000:CANNOT_INIT_PATTERN',
@@ -247,6 +261,9 @@
                     HOOK_SRC_OR_NAME_IS_TOO_SHORT           : '5003:HOOK_SRC_OR_NAME_IS_TOO_SHORT',
                     HOOK_CANNOT_BE_DEFINED_WITH_OTHER_TAGS  : '5004:HOOK_CANNOT_BE_DEFINED_WITH_OTHER_TAGS',
                 },
+                url         : {
+                    URL_SHOULD_BE_DEFINED_AS_STRING         : '6000:URL_SHOULD_BE_DEFINED_AS_STRING',
+                }
             };
             //Classes implementations
             //BEGIN: source class ===============================================
@@ -294,7 +311,8 @@
                                 ajax.send();
                             }
                         } else {
-                            flex.logs.log(signature() + logs.source.TEMPLATE_WAS_LOADED, flex.logs.types.NOTIFICATION);
+                            process(!privates.html.search(settings.regs.BODY) ? privates.html : (privates.html = '<body>' + privates.html + '</body>'), success, fail);
+                            //flex.logs.log(signature() + logs.source.TEMPLATE_WAS_LOADED, flex.logs.types.NOTIFICATION);
                         }
                         return true;
                     };
@@ -413,7 +431,7 @@
                                                 flags   : privates.flags
                                             });
                                         }
-                                        component
+                                        //component
                                         callback(success);
                                     },
                                     function () {
@@ -688,9 +706,6 @@
                                                     });
                                                 }
                                             };
-                                            binds[_prop].bind.bind(binds[_prop]);
-                                            binds[_prop].unbind.bind(binds[_prop]);
-                                            binds[_prop].handle.bind(binds[_prop]);
                                         }
                                     });
                                     return binds;
@@ -729,12 +744,43 @@
                                 return res;
                             }
                         },
+                        prepare     : function(){
+                            privates.html = privates.html.replace(settings.regs.LINES, '');
+                        },
                         fix         : function(){
                             var all = privates.html.match(settings.regs.ALL);
                             if (all instanceof Array) {
                                 all.forEach(function (elem) {
                                     privates.html = privates.html.replace(elem, elem.replace(/\s|\t|\r|\n/gi, ''));
                                 });
+                            }
+                        },
+                        collections : {
+                            find    : function () {
+                                var fragment    = null,
+                                    hook        = null,
+                                    _hook       = null;
+                                do{
+                                    fragment = privates.html.search(settings.regs.COLLECTION_HOOK_TAG);
+                                    fragment = ~fragment ? helpers.getFirstTagWithContect(privates.html.substring(fragment, privates.html.length)) : fragment;
+                                    if (typeof fragment === 'string') {
+                                        hook            = fragment.match(settings.regs.COLLECTION_HOOK_NAME)[0];
+                                        _hook           = hook.replace(settings.regs.COLLECTION_BORDERS, '');
+                                        privates.html   = privates.html.replace(fragment, settings.regs.HOOK_OPEN_STR + _hook + settings.regs.HOOK_CLOSE_STR);
+                                        fragment        = fragment.replace(hook, '');
+                                        privates.map.collections[_hook] = {
+                                            html    : fragment,
+                                            hook    : _hook,
+                                            parent  : self.url,
+                                            id      : self.url + '[' + _hook + ']'
+                                        };
+                                        //Save data
+                                        Source.storage.html.add(privates.map.collections[_hook].id, fragment);
+                                    } else if (fragment === null) {
+                                        flex.logs.log(signature() + logs.source.COLLECTION_HOOK_IS_WRONG, flex.logs.types.CRITICAL);
+                                        throw logs.source.COLLECTION_HOOK_IS_WRONG;
+                                    }
+                                } while (fragment !== -1);
                             }
                         },
                         tags        : {
@@ -762,7 +808,44 @@
                             }
                         },
                         hooks       : {
-                            find: function () {
+                            inAttrs : function (){
+                                var tags = processing.tags.get(),
+                                    regs = settings.regs;
+                                tags.forEach(function (tag, index) {
+                                    var hooks = null;
+                                    if (helpers.testReg(regs.HOOK, tag.mod)) {
+                                        hooks = tag.mod.match(regs.HOOK);
+                                        if (hooks instanceof Array) {
+                                            hooks.forEach(function (hook) {
+                                                var _hook   = hook.replace(regs.HOOK_BORDERS, '');
+                                                tag.mod     = tag.mod.replace(hook, regs.HOOK_OPEN_STR + settings.other.PARENT_MARK_HTML + _hook + regs.HOOK_CLOSE_STR);
+                                                privates.map.hooks.indexOf(_hook) === -1 && (privates.map.hooks.push(_hook));
+                                            });
+                                        }
+                                    }
+                                });
+                            },
+                            inNodes : function () {
+                                var regs            = settings.regs,
+                                    contents        = privates.html.match(regs.INSIDE_TAG);
+                                if (contents instanceof Array) {
+                                    contents.forEach(function (content) {
+                                        var hooks       = privates.html.match(regs.HOOK),
+                                            _content    = content;
+                                        if (hooks instanceof Array) {
+                                            hooks.forEach(function (hook) {
+                                                var _hook       = hook.replace(regs.HOOK_BORDERS, ''),
+                                                    com_open    = '<!--' + settings.other.HOOK_COM_BEGIN + settings.other.PARENT_MARK_HTML + _hook + '-->',
+                                                    com_close   = '<!--' + settings.other.HOOK_COM_END + settings.other.PARENT_MARK_HTML + _hook + '-->';
+                                                _content = _content.replace(hook, com_open + regs.HOOK_OPEN_STR + settings.other.PARENT_MARK_HTML + _hook + regs.HOOK_CLOSE_STR + com_close);
+                                                privates.map.hooks.indexOf(_hook) === -1 && (privates.map.hooks.push(_hook));
+                                            });
+                                            privates.html = privates.html.replace(content, _content);
+                                        }
+                                    });
+                                }
+                            },
+                            find    : function () {
                                 var regs    = settings.regs,
                                     hooks   = privates.html.match(regs.HOOK);
                                 if (hooks instanceof Array) {
@@ -935,7 +1018,7 @@
                                             });
                                         }
                                     });
-                                    attrs = html.match(new RegExp(settings.css.attrs.CONDITION + '=' + settings.regs.STRING_CON_STR, 'gi'));
+                                    attrs = html.match(new RegExp('(' + settings.css.attrs.CONDITION + '=' + settings.regs.STRING_CON_STRICT + '\\s?){1,}', 'gi'));
                                     if (attrs instanceof Array) {
                                         con_strict = new RegExp(settings.css.attrs.CONDITION + '=' + settings.regs.STRING_CON_STRICT, 'gi');
                                         attrs.forEach(function (attr) {
@@ -1011,8 +1094,11 @@
                             }
                         },
                         procced     : function (){
+                            processing.prepare();
                             processing.fix();
-                            processing.hooks.find();
+                            processing.collections.find();
+                            processing.hooks.inAttrs();
+                            processing.hooks.inNodes();
                             processing.events.find();
                             processing.map.model();
                             processing.map.dom();
@@ -1050,19 +1136,21 @@
                         return logs.SIGNATURE + ':: pattern (' + self.url + ')';
                     };
                     returning   = {
-                        load    : load,
-                        html    : html.get,
-                        map     : function () { return privates.map;},
-                        flags   : function () { return privates.flags;},
+                        load        : load,
+                        html        : html.get,
+                        map         : function () { return privates.map;                },
+                        flags       : function () { return privates.flags;              },
+                        collections : function () { return privates.map.collections;    },
                     };
                     return {
-                        load    : returning.load,
-                        html    : returning.html,
-                        map     : returning.map,
-                        binding : {
+                        load        : returning.load,
+                        html        : returning.html,
+                        map         : returning.map,
+                        binding     : {
                             model : processing.binding.model
                         },
-                        flags   : returning.flags
+                        flags       : returning.flags,
+                        collections : returning.collections
                     };
                 },
                 instance    : function (parameters) {
@@ -1070,6 +1158,7 @@
                                                                 { name: 'html', type: 'string', value: null },
                                                                 { name: 'css',  type: 'array',  value: null },
                                                                 { name: 'js',   type: 'array',  value: null }]) !== false) {
+                        parameters.html === null && (parameters.html = Source.storage.html.get(parameters.url));
                         return _object({
                             parent          : settings.classes.SOURCE,
                             constr          : function () {
@@ -1084,9 +1173,11 @@
                                 map     : {
                                     model       : null,
                                     dom         : null,
+                                    hooks       : [],
                                     conditions  : null,
                                     events      : null,
-                                    component   : null
+                                    component   : null,
+                                    collections : {}
                                 },
                                 binding : {
                                     model   : null
@@ -1117,6 +1208,18 @@
                         var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PATTERN_SOURCES, {});
                         return storage[url] !== void 0 ? storage[url] : null;
                     },
+                    html: {
+                        add: function (url, html) {
+                            var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PATTERN_SOURCES_HTML, {});
+                            if (storage[url] === void 0) {
+                                storage[url] = html;
+                            }
+                        },
+                        get: function (url) {
+                            var storage = flex.overhead.globaly.get(settings.storage.VIRTUAL_STORAGE_GROUP, settings.storage.PATTERN_SOURCES_HTML, {});
+                            return storage[url] !== void 0 ? storage[url] : null;
+                        },
+                    }
                 },
                 resource    : {
                     add : function (url, callback) {
@@ -1266,7 +1369,7 @@
                                         setValue(map, path, hooks.url, hooks);
                                     }
                                     process(hooks.hooks, path);
-                                } else if (hooks instanceof Object) {
+                                } else if (typeof hooks === 'object') {
                                     _object(hooks).forEach(function (prop, val) {
                                         process(val, (path !== '' ? (path + '.') : '') + prop);
                                     });
@@ -1436,7 +1539,7 @@
                                                 }(attrs[_prop][0].node));
                                                 attrs[_prop].splice(0, 1);
                                             }
-                                            if (_hooks[prop] !== void 0 && !(_hooks[prop] instanceof settings.classes.CALLER) && !(_hooks[prop] instanceof Object)) {
+                                            if (_hooks[prop] !== void 0 && !(_hooks[prop] instanceof settings.classes.CALLER) && !(typeof _hooks[prop] === 'object')) {
                                                 if (typeof _hooks[prop] === 'function') {
                                                     default_val = _hooks[prop]();
                                                 } else if (typeof _hooks[prop] === 'string') {
@@ -1474,7 +1577,7 @@
                                         } else if (helpers.isArray(val)) {
                                             model[prop] = model[prop] !== void 0 ? model[prop] : [];
                                             process(val, model[prop], (path !== '' ? path + '.' : '') + prop.replace(borders, ''));
-                                        } else if (val instanceof Object) {
+                                        } else if (typeof val === 'object') {
                                             model[prop] = model[prop] !== void 0 ? model[prop] : {};
                                             obj(val, model[prop], (path !== '' ? path + '.' : '') + prop.replace(borders, ''));
                                         }
@@ -1493,6 +1596,42 @@
                                 privates.map.model = helpers.isArray(privates.map.model) ? privates.map.model : new ExArray();
                                 process(_dom, privates.map.model, '');
                             }
+                        },
+                        accessors   : function (){
+                            function process(accessors, model, path) {
+                                function obj(accessors, model, path) {
+                                    if (helpers.isArray(model) && model.length === 1) {
+                                        model = model[0];
+                                    }
+                                    _object(accessors).forEach(function (prop, val) {
+                                        if (val[settings.other.HOOK_ACCESSOR_FUNC_NAME] !== void 0) {
+                                            model[settings.other.ACCESSOR_PREFIX + prop.replace(borders, '')] = val[settings.other.HOOK_ACCESSOR_FUNC_NAME].bind({ model: model, hook: prop });
+                                        }
+                                        if (typeof val === 'object' && val !== null) {
+                                            if ((Object.keys(val).length > 0 && val[settings.other.HOOK_ACCESSOR_FUNC_NAME] === void 0) ||
+                                                (Object.keys(val).length > 1 && val[settings.other.HOOK_ACCESSOR_FUNC_NAME] !== void 0)) {
+                                                model[prop] = model[prop] !== void 0 ? model[prop] : {};
+                                                obj(val, model[prop], (path !== '' ? path + '.' : '') + prop.replace(borders, ''));
+                                            }
+                                        } else if (helpers.isArray(val)) {
+                                            model[prop] = model[prop] !== void 0 ? model[prop] : [];
+                                            process(val, model[prop], (path !== '' ? path + '.' : '') + prop.replace(borders, ''));
+                                        }
+                                    });
+                                };
+                                accessors.forEach(function (accessors, index) {
+                                    if (model[index] === void 0) {
+                                        model.push({});
+                                    }
+                                    obj(accessors, model[index], path);
+                                });
+                            };
+                            var accessors   = helpers.isArray(privates.map.accessors) ? privates.map.accessors : [privates.map.accessors],
+                                borders     = new RegExp('^' + settings.other.SUBLEVEL_BEGIN + '|' + settings.other.SUBLEVEL_END + '$', 'gi');
+                            privates.map.model = helpers.isArray(privates.map.model) ? privates.map.model : new ExArray();
+                            process(accessors, privates.map.model, '', { model: null, prop: null });
+                            //Reset accessors
+                            privates.map.accessors = null;
                         },
                         finalize    : function () {
                             function getMap(path) {
@@ -1554,7 +1693,7 @@
                                             model[ref] === void 0 && (model[ref] = new ExArray());
                                             bind(model[ref], (path !== '' ? path + '.' : '') + prop, val.url);
                                             process(val.hooks, model[ref], (path !== '' ? path + '.' : '') + prop);
-                                        } else if (val instanceof Object) {
+                                        } else if (typeof val === 'object') {
                                             model[prop] === void 0 && (model[prop] = {});
                                             obj(val, model[prop], (path !== '' ? path + '.' : '') + prop);
                                         } else {
@@ -1697,7 +1836,7 @@
                                 dom             = {
                                     add     : function (models) {
                                         models.forEach(function (model) {
-                                            if (model instanceof Object) {
+                                            if (typeof model === 'object') {
                                                 _object(model).forEach(function (prop, val) {
                                                     if (val instanceof addition.nodeList.NODE_LIST) {
                                                         self.parent[prop] === void 0 && (self.parent[prop] = addition.nodeList.create());
@@ -1709,7 +1848,7 @@
                                     },
                                     remove  : function (models) {
                                         models.forEach(function (model) {
-                                            if (model instanceof Object) {
+                                            if (typeof model === 'object') {
                                                 _object(model).forEach(function (prop, val) {
                                                     if (val instanceof addition.nodeList.NODE_LIST && self.parent[prop] !== void 0) {
                                                         self.parent[prop] === void 0 && (self.parent[prop] = addition.nodeList.create());
@@ -1779,7 +1918,7 @@
                                     model.forEach(function (model, index) {
                                         process(model, indexes.concat([index]), parent);
                                     });
-                                } else if (model instanceof Object) {
+                                } else if (typeof model === 'object') {
                                     _object(model).forEach(function (prop, val) {
                                         if (val instanceof addition.nodeList.NODE_LIST) {
                                             val.setIndexes(indexes);
@@ -1802,7 +1941,7 @@
                         cache       : {
                             load    : function (parent, conditions) {
                                 var cache       = privates.cache.html,
-                                    conditions  = conditions instanceof Object ? conditions : false,
+                                    conditions  = typeof conditions === 'object' ? conditions : false,
                                     _cache      = {},
                                     _names      = {},
                                     insts       = {};
@@ -1845,10 +1984,10 @@
                             },
                         },
                         getHTML     : function (parent, name, inst, index){
-                            var html    = false,
-                                cached  = null,
-                                ref     = null,
-                                _ref    = (parent === false ? '' : parent + '.') + settings.other.SUBLEVEL_BEGIN + name + settings.other.SUBLEVEL_END;
+                            var html            = false,
+                                cached          = null,
+                                ref             = null,
+                                _ref            = (parent === false ? '' : parent + '.') + settings.other.SUBLEVEL_BEGIN + name + settings.other.SUBLEVEL_END;
                             if (inst instanceof settings.classes.CALLER) {
                                 ref     = _ref + inst.url;
                                 if (privates.cache.html[ref] !== void 0) {
@@ -1865,19 +2004,28 @@
                         },
                         build       : function (parent, conditions) {
                             var parent      = typeof parent === 'string' ? parent : false,
-                                conditions  = conditions instanceof Object ? conditions : false,
+                                conditions  = typeof conditions === 'object' ? conditions : false,
                                 res         = '',
                                 original    = null,
                                 regs        = settings.regs,
                                 _cache      = cache.reset().regs,
                                 fragments   = [],
-                                cached      = hash.getCache();
+                                cached      = hash.getCache(),
+                                hooks_map   = null;
                             if (cached === null) {
-                                original = self.source.html(parent);
+                                original    = self.source.html(parent);
+                                hooks_map   = self.source.map().hooks;
                                 if (helpers.isArray(privates.hooks)) {
                                     html.cache.load(parent, conditions);
                                     privates.hooks.forEach(function (_hooks, index) {
                                         var fragment = original;
+                                        //Add missing hooks
+                                        if (hooks_map instanceof Array && Object.keys(_hooks).length !== hooks_map.length) {
+                                            hooks_map.forEach(function (mapped_hook_name) {
+                                                _hooks[mapped_hook_name] === void 0 && (_hooks[mapped_hook_name] = '');
+                                            });
+                                        }
+                                        //Insert hooks
                                         _object(_hooks).forEach(function (name, value) {
                                             var _name   = (!parent ? '' : parent + '.') + name,
                                                 _res    = html.getHTML(parent, name, value, index);
@@ -1926,7 +2074,7 @@
                                     hooks.forEach(function (hooks) {
                                         procces(hooks, path, name, dest);
                                     });
-                                } else if (hooks instanceof Object) {
+                                } else if (typeof hooks === 'object') {
                                     _object(hooks).forEach(function (name, hooks) {
                                         procces(hooks, path, name, dest);
                                     });
@@ -1987,7 +2135,7 @@
                                 });
                                 return props;
                             };
-                            var cache = privates.cache.regs;
+                            var cache           = privates.cache.regs;
                             if (typeof value === 'object') {
                                 _object(getProps(name, value)).forEach(function (name, value) {
                                     fragment = hooks.insert(name, value, fragment);
@@ -1996,7 +2144,6 @@
                             } else {
                                 cache[name] = cache[name] === void 0 ? new RegExp(settings.regs.HOOK_OPEN + name + settings.regs.HOOK_CLOSE, 'gi') : cache[name];
                                 return fragment.replace(cache[name], hooks.getValue(name, value));
-                                //return fragment.replace(cache[name], '<!--BEGIN-->' + hooks.getValue(name, value) + '<!--END-->');
                             }
                         },
                         anchors : {
@@ -2029,17 +2176,229 @@
                                 }
                             },
                             convert : function () {
-                                var treeWalker = document.createTreeWalker(
+                                function converHooksAccessors(accessors, name, path) {
+                                    function convert(node) {
+                                        var textNode = document.createTextNode('');
+                                        node.parentNode.insertBefore(textNode, node);
+                                        node.parentNode.removeChild(node);
+                                        return textNode;
+                                    };
+                                    function makeAccessor(begin, end, path) {
+                                        return function hookAccessor(content, safely) {
+                                            function getNodes(begin, end) {
+                                                var i       = 10000,
+                                                    nodes   = [],
+                                                    current = begin;
+                                                do {
+                                                    if (current !== begin && current !== end) {
+                                                        nodes.push(current);
+                                                    }
+                                                    current = current.nextSibling;
+                                                    i -= 1;
+                                                } while (i >= 0 && current !== null && current !== end);
+                                                i < 0 && flex.logs.log(signature() + logs.pattern.CANNOT_DETECT_BEGIN_OR_END_HOOK_ANC + '. Hook name: (' + path + ')', flex.logs.types.WARNING);
+                                                return nodes;
+                                            };
+                                            function getValue(value) {
+                                                var res = value;
+                                                if (typeof value === 'function') {
+                                                    res = getValue(value());
+                                                } else if (typeof value === 'string') {
+                                                    res = value;
+                                                } else if (typeof value !== 'object' && typeof value.toString === 'function') {
+                                                    res = value.toString();
+                                                }
+                                                return res === null ? '' : res;
+                                            };
+                                            function setModelValue(model, hook, value, pattern) {
+                                                var prev = model[hook] !== void 0 ? model[hook] : model[settings.other.SUBLEVEL_BEGIN + hook + settings.other.SUBLEVEL_END];
+                                                model[settings.other.SUBLEVEL_BEGIN + hook + settings.other.SUBLEVEL_END] !== void 0 && (delete model[settings.other.SUBLEVEL_BEGIN + hook + settings.other.SUBLEVEL_END]);
+                                                model[hook]                                                                 !== void 0 && (delete model[hook]);
+                                                model[(pattern ? settings.other.SUBLEVEL_BEGIN : '') + hook + (pattern ? settings.other.SUBLEVEL_END : '')] = value;
+                                                if (privates.controller !== null && typeof privates.controller === 'object' && typeof privates.controller[settings.events.ONCHANGE] === 'function') {
+                                                    privates.controller[settings.events.ONCHANGE]((pattern ? settings.other.SUBLEVEL_BEGIN : '') + hook + (pattern ? settings.other.SUBLEVEL_END : ''), value, prev);
+                                                }
+                                            };
+                                            var nodes       = getNodes(begin, end),
+                                                inserted    = getValue(content),
+                                                wrapper     = null,
+                                                tag         = null,
+                                                safely      = typeof safely === 'boolean' ? safely : true,
+                                                model       = this;
+                                            if (nodes instanceof Array && nodes.length > 0) {
+                                                //Remove nodes
+                                                nodes.forEach(function (node) {
+                                                    node.parentNode.removeChild(node);
+                                                });
+                                                //Inserting
+                                                if (typeof inserted === 'string' && !safely) {
+                                                    tag = helpers.getFirstTag(inserted);
+                                                    if (tag !== null) {
+                                                        wrapper = helpers.getParentFor(tag);
+                                                        if (wrapper !== null) {
+                                                            wrapper.innerHTML = inserted;
+                                                            Array.prototype.forEach.call(wrapper.childNodes, function (child) {
+                                                                end.parentNode.insertBefore(child, end);
+                                                            });
+                                                        } else {
+                                                            flex.logs.log(signature() + logs.pattern.CANNOT_DETECT_HTML + '. Hook name: (' + path + ')', flex.logs.types.WARNING);
+                                                        }
+                                                    } else {
+                                                        end.parentNode.insertBefore(document.createTextNode(inserted), end);
+                                                    }
+                                                    setModelValue(model.model, model.hook, inserted, false);
+                                                } else if (typeof inserted === 'string' && safely){
+                                                    end.parentNode.insertBefore(document.createTextNode(inserted), end);
+                                                    setModelValue(model.model, model.hook, inserted, false);
+                                                } else if (inserted instanceof settings.classes.CALLER) {
+                                                    inserted.render({
+                                                        replace : false,
+                                                        before  : end,
+                                                        callback: function (result) {
+                                                            setModelValue(model.model, model.hook, result.model, true);
+                                                            return result;
+                                                        }
+                                                    });
+                                                } else {
+                                                    flex.logs.log(signature() + logs.pattern.TEXT_HOOK_VALUE_CANBE_ONLY_TEXT + '. Hook name: (' + path + ')', flex.logs.types.WARNING);
+                                                    end.parentNode.insertBefore(document.createTextNode(Object.prototype.toString.call(inserted)), end);
+                                                    setModelValue(model.model, model.hook, Object.prototype.toString.call(inserted), false);
+                                                }
+                                            }
+                                        };
+                                    };
+                                    if (helpers.isArray(accessors)) {
+                                        if (accessors[settings.other.HOOK_COM_BEGIN] !== void 0 && accessors[settings.other.HOOK_COM_END] !== void 0) {
+                                            accessors[settings.other.HOOK_ACCESSOR_FUNC_NAME] = makeAccessor(convert(accessors[settings.other.HOOK_COM_BEGIN]), convert(accessors[settings.other.HOOK_COM_END]), path);
+                                            delete accessors[settings.other.HOOK_COM_BEGIN];
+                                            delete accessors[settings.other.HOOK_COM_END];
+                                        }
+                                        accessors.forEach(function (accessors) {
+                                            converHooksAccessors(accessors, name, path);
+                                        });
+                                    } else if (typeof accessors === 'object' && accessors !== null) {
+                                        if (accessors[settings.other.HOOK_COM_BEGIN ] !== void 0 && accessors[settings.other.HOOK_COM_END] !== void 0) {
+                                            accessors[settings.other.HOOK_ACCESSOR_FUNC_NAME] = makeAccessor(convert(accessors[settings.other.HOOK_COM_BEGIN]), convert(accessors[settings.other.HOOK_COM_END]), path);
+                                            delete accessors[settings.other.HOOK_COM_BEGIN];
+                                            delete accessors[settings.other.HOOK_COM_END];
+                                            _object(accessors).forEach(function (prop, accessors) {
+                                                if (prop !== settings.other.HOOK_COM_BEGIN && prop !== settings.other.HOOK_COM_END) {
+                                                    converHooksAccessors(accessors, prop, path + (path === '' ? '' : '.') + prop);
+                                                }
+                                            });
+                                        } else {
+                                            _object(accessors).forEach(function (prop, accessors) {
+                                                converHooksAccessors(accessors, prop, path + (path === '' ? '' : '.') + prop);
+                                            });
+                                        }
+                                    }
+                                };
+                                var cursor          = { __root : 0 },
+                                    accessors       = [{}],
+                                    ends            = {},
+                                    remove          = [],
+                                    treeWalker      = document.createTreeWalker(
                                         privates.wrapper,
                                         NodeFilter.SHOW_COMMENT,
-                                        { acceptNode: function (node) { return ~(node.nodeValue.indexOf(settings.other.ANCHOR)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT; } },
+                                        {
+                                            acceptNode: function (node) {
+                                                function getObj(ref) {
+                                                    var path    = ref.split('.'),
+                                                        trg     = accessors[cursor.__root],
+                                                        cur     = '',
+                                                        prev    = null,
+                                                        _trg    = null;
+                                                    path.forEach(function (step, index) {
+                                                        _trg = trg;
+                                                        cur += (cur === '' ? '' : '.') + step;
+                                                        if (prev === null && trg[step] !== void 0 && index === path.length - 1) {
+                                                            accessors.push({});
+                                                            cursor.__root   += 1;
+                                                            trg             = accessors[cursor.__root];
+                                                        }
+                                                        if (trg[step] === void 0) {
+                                                            trg[step]   = {};
+                                                            trg         = trg[step];
+                                                        } else {
+                                                            if (trg[step] instanceof Array) {
+                                                                if (index === path.length - 1) {
+                                                                    trg[step].push({});
+                                                                    cursor[cur] += 1;
+                                                                    trg         = trg[step][cursor[cur]];
+                                                                } else {
+                                                                    trg         = trg[step][cursor[cur]];
+                                                                }
+                                                            } else {
+                                                                if (index === path.length - 1) {
+                                                                    if (prev.trg[prev.step] instanceof Array) {
+                                                                        prev.trg[prev.step].push({});
+                                                                        cursor[prev.cur]    += 1;
+                                                                        trg                 = prev.trg[prev.step][cursor[prev.cur]];
+                                                                        trg[step]           = {};
+                                                                        trg                 = trg[step];
+                                                                    } else {
+                                                                        prev.trg[prev.step] = [prev.trg[prev.step], {}];
+                                                                        if (prev.trg[prev.step][0][settings.other.HOOK_COM_BEGIN] !== void 0 ){
+                                                                            prev.trg[prev.step][settings.other.HOOK_COM_BEGIN]  = prev.trg[prev.step][0][settings.other.HOOK_COM_BEGIN];
+                                                                            prev.trg[prev.step][0][ref_perent]                  = prev.trg[prev.step];
+                                                                            delete prev.trg[prev.step][0][settings.other.HOOK_COM_BEGIN];
+                                                                        }
+                                                                        trg                 = prev.trg[prev.step][1];
+                                                                        trg[step]           = {};
+                                                                        trg                 = trg[step];
+                                                                        cursor[prev.cur]    = 1;
+                                                                    }
+                                                                } else {
+                                                                    trg = trg[step];
+                                                                }
+                                                            }
+                                                        }
+                                                        prev = {
+                                                            cur : cur,
+                                                            trg : _trg,
+                                                            step: step
+                                                        };
+                                                    });
+                                                    return trg;
+                                                };
+                                                var obj         = null,
+                                                    clr         = null,
+                                                    ref_perent  = '__REF_TO_PARENT_ARR',
+                                                    _parent     = null;
+                                                if (config.get().ACCESSORS) {
+                                                    if (~(node.nodeValue.indexOf(settings.other.HOOK_COM_BEGIN))) {
+                                                        clr                                 = node.nodeValue.replace(settings.other.HOOK_COM_BEGIN, '');
+                                                        obj                                 = getObj(clr);
+                                                        obj[settings.other.HOOK_COM_BEGIN]  = node;
+                                                        ends[clr]                           = obj;
+                                                    }
+                                                    if (~(node.nodeValue.indexOf(settings.other.HOOK_COM_END))) {
+                                                        clr                                     = node.nodeValue.replace(settings.other.HOOK_COM_END, '');
+                                                        if (ends[clr][ref_perent] !== void 0){
+                                                            _parent     = ends[clr][ref_perent];
+                                                            delete ends[clr][ref_perent];
+                                                            ends[clr]   = _parent;
+                                                        }
+                                                        ends[clr][settings.other.HOOK_COM_END]  = node;
+                                                    }
+                                                } else {
+                                                    if (~(node.nodeValue.indexOf(settings.other.HOOK_COM_BEGIN)) || ~(node.nodeValue.indexOf(settings.other.HOOK_COM_END))) {
+                                                        remove.push(node);
+                                                    }
+                                                }
+                                                return ~(node.nodeValue.indexOf(settings.other.ANCHOR)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                                            }
+                                        },
                                         false
                                     ),
-                                    nodeList    = [],
-                                    anchors     = {};
+                                    nodeList        = [],
+                                    anchors         = {};
                                 while (treeWalker.nextNode()) {
                                     nodeList.push(treeWalker.currentNode);
                                 }
+                                remove.forEach(function (node) {
+                                    node.parentNode.removeChild(node);
+                                });
                                 nodeList.forEach(function (node) {
                                     var anchor  = document.createTextNode(''),
                                         ref     = node.nodeValue.replace(settings.other.ANCHOR, '');
@@ -2048,7 +2407,9 @@
                                     node.parentNode.insertBefore(anchor, node);
                                     node.parentNode.removeChild(node);
                                 });
-                                privates.map.anchors = anchors;
+                                config.get().ACCESSORS && converHooksAccessors(accessors, '', '');
+                                privates.map.anchors    = anchors;
+                                privates.map.accessors  = accessors;
                             },
                             get     : function (path) {
                                 var anchor = null;
@@ -2138,7 +2499,7 @@
                                         var ref     = path + prop,
                                             open    = 'OPEN-' + ref,
                                             close   = 'CLOSE-' + ref;
-                                        cache.removed[open]     = cache.removed[open]   !== void 0 ? cache.removed[open]    : new RegExp('<\\!--' + ref.replace('.', '\\.') + '=.{1,}' + '-->', 'gi');
+                                        cache.removed[open]     = cache.removed[open]   !== void 0 ? cache.removed[open]    : new RegExp('<\\!--' + ref.replace('.', '\\.') + '=.{1,}?' + '-->', 'gi');
                                         cache.removed[close]    = cache.removed[close]  !== void 0 ? cache.removed[close]   : new RegExp('<\\!--' + ref.replace('.', '\\.') + '-->', 'gi');
                                         fragment = fragment.replace(cache.removed[open], '');
                                         fragment = fragment.replace(cache.removed[close], '');
@@ -2390,14 +2751,14 @@
                                     process(hooks.hooks, model, _controller, hooks.exchange !== null ? hooks.exchange : exchange);
                                 } else if (helpers.isArray(hooks)) {
                                     hooks.forEach(function (hooks, index) {
-                                        if (hooks instanceof settings.classes.CALLER || hooks instanceof Object || helpers.isArray(hooks)) {
+                                        if (hooks instanceof settings.classes.CALLER || typeof hooks === 'object' || helpers.isArray(hooks)) {
                                             process(hooks,
                                                     model !== null ? (model[index] !== void 0 ? model[index] : null) : null,
                                                     _controller,
                                                     exchange);
                                         }
                                     });
-                                } else if (hooks instanceof Object && !helpers.isArray(hooks)) {
+                                } else if (typeof hooks === 'object' && !helpers.isArray(hooks)) {
                                     if (_controller !== null) {
                                         controller.handle(_controller, model, exchange, update);
                                     }
@@ -2406,7 +2767,7 @@
                                         if (hooks instanceof settings.classes.CALLER) {
                                             ref = settings.other.SUBLEVEL_BEGIN + name + settings.other.SUBLEVEL_END;
                                         }
-                                        if (hooks instanceof settings.classes.CALLER || hooks instanceof Object || helpers.isArray(hooks)) {
+                                        if (hooks instanceof settings.classes.CALLER || typeof hooks === 'object' || helpers.isArray(hooks)) {
                                             process(hooks,
                                                     model !== null ? (model[ref] !== void 0 ? model[ref] : null) : null,
                                                     null,
@@ -2433,7 +2794,7 @@
                             var update = typeof update === 'boolean' ? update : false;
                             if (handle instanceof Function) {
                                 call(handle);
-                            } else if (handle instanceof Object) {
+                            } else if (typeof handle === 'object' && handle !== null) {
                                 if (update) {
                                     handle[settings.events.ONUPDATE] instanceof Function && call(handle[settings.events.ONUPDATE], handle);
                                 } else {
@@ -2527,6 +2888,7 @@
                             hooks.anchors.convert();
                             model.bind();
                             model.combine();
+                            model.accessors();
                             model.finalize();
                             dom.indexes();
                             condition.apply();
@@ -2534,7 +2896,7 @@
                             controller.events();
                             html.map();
                         },
-                        build   : function () {
+                        build   : function (callback) {
                             cache.reset();
                             hash.setHash();
                             condition.find();
@@ -2542,6 +2904,7 @@
                             mapping.refs();
                             methods.make(false);
                             controller.handle(privates.caller.onReady, privates.map.model, privates.caller.exchange);
+                            controller.handle(callback, privates.map.model, privates.caller.exchange);
                             return {
                                 nodes   : privates.wrapper.children,
                                 model   : privates.map.model,
@@ -2559,7 +2922,7 @@
                                 }
                                 src.forEach(function (hooks, index) {
                                     var item = {};
-                                    if (hooks instanceof Object) {
+                                    if (typeof hooks === 'object') {
                                         _object(hooks).forEach(function (prop, val) {
                                             if (refs.hooks[prop] !== void 0) {
                                                 item[prop] = Caller.instance({
@@ -2666,7 +3029,7 @@
                         signature   = null,
                         returning   = null;
                     patterns    = {
-                        inHooks    : function (hooks) {
+                        inHooks : function (hooks) {
                             var hooks = hooks === void 0 ? privates.hooks : hooks;
                             hooks = helpers.isArray(hooks) ? hooks : (hooks !== null ? new ExArray([hooks]) : null);
                             if (hooks !== null) {
@@ -2675,8 +3038,8 @@
                                         if (hook_value instanceof settings.classes.CALLER) {
                                             if (privates.patterns.indexOf(hook_value.url) === -1) {
                                                 privates.patterns.push(hook_value.url);
-                                                patterns.inHooks(hook_value.hooks);
                                             }
+                                            patterns.inHooks(hook_value.hooks);
                                         }
                                     });
                                 });
@@ -2685,10 +3048,10 @@
                         },
                         inMap   : function (map) {
                             var map = map === void 0 ? privates.map : map;
-                            if (map !== null && map instanceof Object) {
+                            if (map !== null && typeof map === 'object') {
                                 _object(map).forEach(function (prop, val) {
                                     var url = null;
-                                    if (val !== null && val instanceof Object) {
+                                    if (val !== null && typeof val === 'object') {
                                         url = val.url !== void 0 ? flex.system.url.restore(val.url) : null;
                                         val.url     !== void 0 && (!~privates.patterns.indexOf(url) && privates.patterns.push(url));
                                         val.hooks   !== void 0 && patterns.inMap(val.hooks);
@@ -2703,36 +3066,36 @@
                         privates.mounted = Array.prototype.filter.call(nodes, function () { return true; });
                         if (privates.node !== null) {
                             Array.prototype.forEach.call(privates.node, function (parent) {
-                                Array.prototype.forEach.call(nodes, function (node) {
+                                for (var i = 0, max = nodes.length; i < max; i += 1) {
                                     if (!privates.replace) {
-                                        parent.appendChild(node);
+                                        parent.appendChild(nodes[max !== nodes.length ? 0 : i]);
                                     } else {
-                                        parent.parentNode.insertBefore(node, parent);
+                                        parent.parentNode.insertBefore(nodes[max !== nodes.length ? 0 : i], parent);
                                     }
-                                });
+                                }
                                 if (privates.replace) {
                                     parent.parentNode.removeChild(parent);
                                 }
                                 !~context.indexOf(parent.parentNode) && context.push(parent.parentNode);
                             });
-                        } else if (privates.before !== null && privates.before.parentNode !== void 0 && privates.before.parentNode !== null) {
+                        } else if (privates.before !== null) {
                             Array.prototype.forEach.call(privates.before, function (parent) {
-                                Array.prototype.forEach.call(nodes, function (node) {
-                                    parent.parentNode.insertBefore(node, privates.before);
-                                });
+                                for (var i = 0, max = nodes.length; i < max; i += 1){
+                                    parent.parentNode !== null && parent.parentNode.insertBefore(nodes[max !== nodes.length ? 0 : i], parent);
+                                }
                                 !~context.indexOf(parent.parentNode) && context.push(parent.parentNode);
                             });
-                        } else if (privates.after !== null && privates.after.parentNode !== void 0 && privates.after.parentNode !== null) {
+                        } else if (privates.after !== null) {
                             Array.prototype.forEach.call(privates.after, function (parent) {
                                 var _before = parent.nextSibling !== void 0 ? parent.nextSibling : null;
                                 if (_before !== null) {
-                                    Array.prototype.forEach.call(nodes, function (node) {
-                                        _before.parentNode.insertBefore(node, _before);
-                                    });
+                                    for (var i = 0, max = nodes.length; i < max; i += 1) {
+                                        _before.parentNode.insertBefore(nodes[max !== nodes.length ? 0 : i], _before);
+                                    }
                                 } else {
-                                    Array.prototype.forEach.call(nodes, function (node) {
-                                        parent.parentNode.appendChild(node);
-                                    });
+                                    for (var i = 0, max = nodes.length; i < max; i += 1) {
+                                        parent.parentNode && parent.parentNode.appendChild(nodes[max !== nodes.length ? 0 : i]);
+                                    }
                                 }
                                 !~context.indexOf(parent.parentNode) && context.push(parent.parentNode);
                             });
@@ -2758,7 +3121,7 @@
                             }
                         }
                     };
-                    render      = function () {
+                    render      = function (parameters) {
                         function makeComponentCaller(map) {
                             function getHooks(map, hooks) {
                                 function obj(map, hooks) {
@@ -2841,35 +3204,129 @@
                                 callback();
                             }
                         };
+                        function checkURLs(callback) {
+                            function check(hooks) {
+                                function asObj(hooks) {
+                                    _object(hooks).forEach(function (name, obj) {
+                                        if (obj instanceof settings.classes.URL) {
+                                            flex.overhead.register.add(URL_REGISTER, name + obj.url);
+                                            obj.load(function (response) {
+                                                hooks[name] = response;
+                                                flex.overhead.register.done(URL_REGISTER, name + obj.url);
+                                            });
+                                        } else if (obj instanceof settings.classes.CALLER) {
+                                            check(obj.hooks);
+                                        } else if (typeof obj === 'object' && obj !== null) {
+                                            asObj(obj);
+                                        } else if (helpers.isArray(obj)) {
+                                            check(hooks);
+                                        }
+                                    });
+                                };
+                                if (helpers.isArray(hooks)) {
+                                    hooks.forEach(function (_hooks, index) {
+                                        if (_hooks instanceof settings.classes.URL) {
+                                            flex.overhead.register.add(URL_REGISTER, _hooks.url);
+                                            _hooks.load(function (response) {
+                                                if (helpers.isArray(response)) {
+                                                    hooks.splice(0, hooks.length);
+                                                    response.forEach(function (item) {
+                                                        hooks.push(item);
+                                                    });
+                                                } else {
+                                                    hooks[index] = response;
+                                                }
+                                                flex.overhead.register.done(URL_REGISTER, _hooks.url);
+                                            });
+                                        } else {
+                                            asObj(_hooks);
+                                        }
+                                    });
+                                }
+                            };
+                            var URL_REGISTER = 'PATTERNS.URLS.REGISTER';
+                            if (privates.hooks !== null) {
+                                flex.overhead.register.open(URL_REGISTER, [], callback);
+                                check(privates.hooks);
+                                flex.overhead.register.isReady(URL_REGISTER) && callback();
+                            } else {
+                                callback();
+                            }
+                        };
+                        function checkCollections(sources) {
+                            function updateHooks(hooks, collection, parent) {
+                                if (helpers.isArray(hooks)) {
+                                    hooks.forEach(function (hooks) {
+                                        updateHooks(hooks, collection, parent);
+                                    });
+                                } else if (typeof hooks === 'object' && hooks !== null) {
+                                    if (hooks[collection.hook] !== void 0 && hooks[collection.hook] !== null && !(hooks[collection.hook] instanceof settings.classes.CALLER) && collection.parent === parent) {
+                                        hooks[collection.hook] = Caller.instance({
+                                            url     : collection.id,
+                                            hooks   : hooks[collection.hook]
+                                        });
+                                        result = true;
+                                    } else {
+                                        _object(hooks).forEach(function (prop, val) {
+                                            if (prop !== collection.hook) {
+                                                if ((typeof val === 'object' && val !== null) || val instanceof settings.classes.CALLER) {
+                                                    updateHooks(val instanceof settings.classes.CALLER ? val.hooks : val, collection, val instanceof settings.classes.CALLER ? val.url : parent);
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            };
+                            var result = false;
+                            sources.forEach(function (source) {
+                                var collections = source.collections();
+                                if (Object.keys(collections).length > 0) {
+                                    _object(collections).forEach(function (prop, collection) {
+                                        updateHooks(privates.hooks, collection, self.url);
+                                    });
+                                }
+                            });
+                            return result;
+                        };
                         function onSuccess(sources) {
                             //Check addition references
                             checkAdditionRefs(function () {
-                                //Setup default hooks
-                                if (helpers.isArray(privates.hooks)) {
-                                    privates.hooks.forEach(function(hooks, index){
-                                        privates.hooks[index] = defaultshooks.apply(hooks, self.url);
-                                    });
-                                } else {
-                                    privates.hooks = defaultshooks.apply({}, self.url);
-                                    Object.keys(privates.hooks).length > 0  && (privates.hooks = new ExArray([privates.hooks]));
-                                    !helpers.isArray(privates.hooks)        && (privates.hooks = null);
-                                }
-                                if (sources.length === 1 && sources[0].map().component !== null) {
-                                    //This is component
-                                    makeComponentCaller(sources[0].map().component);
-                                } else {
-                                    //Correct callers
-                                    correctCallers();
-                                    //This is pattern
-                                    privates.pattern = Pattern.instance({
-                                        id      : privates.id,
-                                        url     : self.url,
-                                        hooks   : privates.hooks,
-                                        caller  : privates.__instance
-                                    }).build();
-                                    mount();
-                                    return true;
-                                }
+                                checkURLs(function () {
+                                    //Setup default hooks
+                                    if (helpers.isArray(privates.hooks)) {
+                                        privates.hooks.forEach(function(hooks, index){
+                                            privates.hooks[index] = defaultshooks.apply(hooks, self.url);
+                                        });
+                                    } else {
+                                        privates.hooks = defaultshooks.apply({}, self.url);
+                                        Object.keys(privates.hooks).length > 0  && (privates.hooks = new ExArray([privates.hooks]));
+                                        !helpers.isArray(privates.hooks)        && (privates.hooks = null);
+                                    }
+                                    if (sources.length === 1 && sources[0].map().component !== null) {
+                                        //This is component
+                                        makeComponentCaller(sources[0].map().component);
+                                    } else {
+                                        //Correct callers
+                                        correctCallers();
+                                        //Check collections
+                                        if (!checkCollections(sources)) {
+                                            //No collections inside
+                                            //This is pattern
+                                            privates.pattern = Pattern.instance({
+                                                id      : privates.id,
+                                                url     : self.url,
+                                                hooks   : privates.hooks,
+                                                caller  : privates.__instance
+                                            }).build(parameters.callback);
+                                            mount();
+                                            return true;
+                                        } else {
+                                            //Some collections inside
+                                            //Repeat whole procedure
+                                            return render();
+                                        }
+                                    }
+                                });
                             });
                         };
                         function onFail() {
@@ -2877,9 +3334,22 @@
                             privates.onReady(null, logs.caller.CANNOT_INIT_PATTERN, self.url);
                             throw logs.caller.CANNOT_INIT_PATTERN;
                         };
-                        patterns.inHooks();
-                        patterns.inMap();
-                        Source.init(privates.patterns, onSuccess, onFail);
+                        parameters = parameters === void 0 ? {} : parameters;
+                        if (flex.oop.objects.validate(parameters, [ { name: 'node',     type: ['node', 'string', 'array', 'NodeList'],  value: privates.node    },
+                                                                    { name: 'before',   type: ['node', 'string', 'array', 'NodeList'],  value: privates.before  },
+                                                                    { name: 'after',    type: ['node', 'string', 'array', 'NodeList'],  value: privates.after   },
+                                                                    { name: 'replace',  type: 'boolean',                                value: privates.replace },
+                                                                    { name: 'callback', type: 'function',                               value: null             }]) !== false) {
+                            privates.node       = parameters.node   !== null ? (typeof parameters.node      === 'string' ? _nodes(parameters.node   ).target : (parameters.node     instanceof Array ? parameters.node      : (parameters.node      instanceof NodeList ? parameters.node   : [parameters.node]     ))) : null;
+                            privates.before     = parameters.before !== null ? (typeof parameters.before    === 'string' ? _nodes(parameters.before ).target : (parameters.before   instanceof Array ? parameters.before    : (parameters.before    instanceof NodeList ? parameters.before : [parameters.before]   ))) : null;
+                            privates.after      = parameters.after  !== null ? (typeof parameters.after     === 'string' ? _nodes(parameters.after  ).target : (parameters.after    instanceof Array ? parameters.after     : (parameters.after     instanceof NodeList ? parameters.after  : [parameters.after]    ))) : null;
+                            privates.replace    = parameters.replace;
+                            checkURLs(function () {
+                                patterns.inHooks();
+                                patterns.inMap();
+                                Source.init(privates.patterns, onSuccess, onFail);
+                            });
+                        }
                     };
                     build       = function () {
                         return Pattern.instance({
@@ -2933,7 +3403,7 @@
                                                                 { name: 'after',                type: ['node', 'string', 'array', 'NodeList'],      value: null         },
                                                                 { name: 'id',                   type: 'string',                                     value: flex.unique()},
                                                                 { name: 'replace',              type: 'boolean',                                    value: false        },
-                                                                { name: 'hooks',                type: ['object', 'array'],                          value: null         },
+                                                                { name: 'hooks',                type: ['object', 'array', settings.classes.URL],        value: null         },
                                                                 { name: 'conditions',           type: 'object',                                     value: {}           },
                                                                 { name: 'controller',           type: ['function', 'object'],                       value: null         },
                                                                 { name: settings.events.ONREADY, type: 'function', value: function () { } },
@@ -2978,7 +3448,7 @@
             //END: caller class ===============================================
             addition        = {
                 nodeList: {
-                    NODE_LIST   : function(nodeList){
+                    NODE_LIST   : function (nodeList){
                         function addID(smth) {
                             smth.collection_id  = flex.unique();
                             smth.indexes        = null;
@@ -3263,10 +3733,72 @@
                     create  : function (context) {
                         return new addition.map.MAP(context);
                     }
-                }
+                },
+                url: {
+                    create: function (url, parameters) {
+                        return _object({
+                            parent  : settings.classes.URL,
+                            constr  : function () {
+                                this.url                            = typeof url        === 'string' ? url          : null;
+                                this.parameters                     = typeof parameters === 'object' ? parameters : {};
+                                this.callback                       = null;
+                                this.parameters.parser              = this.parameters.parser            !== void 0 ? this.parameters.parser             : null;
+                                this.parameters.method              = this.parameters.method            !== void 0 ? this.parameters.method             : flex.ajax.methods.GET;
+                                this.parameters.parameters          = this.parameters.parameters        !== void 0 ? this.parameters.parameters         : void 0;
+                                this.parameters.settings            = this.parameters.settings          !== void 0 ? this.parameters.settings           : void 0;
+                                this.parameters.callbacks           = this.parameters.callbacks         !== void 0 ? this.parameters.callbacks          : {};
+                                this.parameters.callbacks.success   = this.parameters.callbacks.success !== void 0 ? this.parameters.callbacks.success  : null;
+                                this.parameters.callbacks._success  = this.parameters.callbacks.success;
+                                this.parameters.callbacks           = this.parameters.callbacks         !== void 0 ? this.parameters.callbacks          : {};
+                                this.parameters.callbacks.fail      = this.parameters.callbacks.fail    !== void 0 ? this.parameters.callbacks.fail     : null;
+                                this.parameters.callbacks._fail     = this.parameters.callbacks.fail;
+                                if (this.url === null) {
+                                    throw logs.url.URL_SHOULD_BE_DEFINED_AS_STRING;
+                                }
+                            },
+                            privates    : { },
+                            prototype   : function(){
+                                var self        = this,
+                                    onSuccess   = null,
+                                    onFail      = null,
+                                    load        = null,
+                                    update      = null;
+                                onSuccess   = function (response, event) {
+                                    response = typeof self.parameters.parser === 'function' ? self.parameters.parser(response.parsed !== void 0 ? response.parsed : response.original) : (response.parsed !== void 0 ? response.parsed : response.original);
+                                    typeof self.parameters.callbacks._success   === 'function' && self.parameters.callbacks._success(response, event);
+                                    typeof self.callback                        === 'function' && self.callback(response, event);
+
+                                };
+                                onFail      = function (response, event) {
+                                    typeof self.parameters.callbacks._fail  === 'function' && self.parameters.callbacks._fail(event);
+                                    typeof self.callback                    === 'function' && self.callback(response, event);
+                                };
+                                load        = function (callback) {
+                                    self.parameters.callbacks.success   = onSuccess;
+                                    self.parameters.callbacks.fail      = onFail;
+                                    self.callback                       = callback;
+                                    var request = flex.ajax.send(
+                                        self.url,
+                                        self.parameters.method      !== void 0 ? self.parameters.method     : void 0,
+                                        self.parameters.parameters  !== void 0 ? self.parameters.parameters : void 0,
+                                        self.parameters.callbacks   !== void 0 ? self.parameters.callbacks  : void 0,
+                                        self.parameters.settings    !== void 0 ? self.parameters.settings   : void 0
+                                    );
+                                    request.send();
+                                };
+                                update      = function (callback) {
+                                    load(callback);
+                                };
+                                return {
+                                    load : load
+                                };
+                            }
+                        }).createInstanceClass();
+                    }
+                },
             };
             layout          = {
-                journal: {
+                journal     : {
                     data    : [],
                     add     : function (url) {
                         layout.journal.data.push(flex.system.url.restore(url));
@@ -3494,21 +4026,29 @@
                         url         = null,
                         map         = layout.getHooksMap(),
                         single      = hooks_set instanceof Array ? false : true,
-                        hooks_set   = hooks_set instanceof Array ? hooks_set.concat(getHooksSet(pattern)) : getHooksSet(pattern);
-                    single  = single ? (hooks_set.length === 1 ? hooks_set[0] : false) : false;
-                    _caller = {
-                        url     : pattern.hasAttribute(config.get().PATTERN_SRC) ? pattern.getAttribute(config.get().PATTERN_SRC) : (map[path] !== void 0 ? map[path].src : null),
-                        hooks   : {}
-                    };
-                    if (single !== false && !hasHooks(pattern, _caller.url, hooks_set)) {
-                        processing(pattern, single);
+                        hooks_set   = hooks_set instanceof Array ? hooks_set.concat(getHooksSet(pattern)) : getHooksSet(pattern),
+                        hooks_src   = pattern.hasAttribute(config.get().HOOKS_SRC) ? pattern.getAttribute(config.get().HOOKS_SRC) : null;
+                    if (hooks_src !== null && hooks_src !== '') {
+                        _caller = {
+                            url     : pattern.hasAttribute(config.get().PATTERN_SRC) ? pattern.getAttribute(config.get().PATTERN_SRC) : (map[path] !== void 0 ? map[path].src : null),
+                            hooks   : addition.url.create(hooks_src)
+                        };
                     } else {
-                        Array.prototype.forEach.call(pattern.children, function (child) {
-                            processing(child);
-                        });
-                    }
-                    if (typeof _caller.hooks === 'object' && Object.keys(_caller.hooks).length === 0) {
-                        delete _caller.hooks;
+                        single = single ? (hooks_set.length === 1 ? hooks_set[0] : false) : false;
+                        _caller = {
+                            url     : pattern.hasAttribute(config.get().PATTERN_SRC) ? pattern.getAttribute(config.get().PATTERN_SRC) : (map[path] !== void 0 ? map[path].src : null),
+                            hooks   : {}
+                        };
+                        if (single !== false && !hasHooks(pattern, _caller.url, hooks_set)) {
+                            processing(pattern, single);
+                        } else {
+                            Array.prototype.forEach.call(pattern.children, function (child) {
+                                processing(child);
+                            });
+                        }
+                        if (typeof _caller.hooks === 'object' && Object.keys(_caller.hooks).length === 0) {
+                            delete _caller.hooks;
+                        }
                     }
                     if (!is_child && _caller.url !== null) {
                         _caller.node        = pattern;
@@ -3767,11 +4307,11 @@
                 }
             };
             helpers         = {
-                testReg     : function(reg, str){
+                testReg                 : function(reg, str){
                     reg.lastIndex = 0;
                     return reg.test(str);
                 },
-                binds       : {
+                binds                   : {
                     data        : {
                         value: [
                             //Group #1
@@ -3818,15 +4358,15 @@
                         return false;
                     }
                 },
-                isNode      : function (something) {
+                isNode                  : function (something) {
                     if (something !== void 0 && something.nodeName !== void 0 && something.parentNode !== void 0 && something.nodeType !== void 0) {
                         return true;
                     } else {
                         return false;
                     }
                 },
-                isArray     : function(arr) { return arr instanceof Array ? true : arr instanceof ExArray;},
-                getTextNode : function (node, text, index) {
+                isArray                 : function (arr) { return arr instanceof Array ? true : arr instanceof ExArray;},
+                getTextNode             : function (node, text, index) {
                     var target  = null,
                         index   = index !== void 0 ? index : null;
                     if (node.childNodes !== void 0) {
@@ -3845,34 +4385,14 @@
                     }
                     return target;
                 },
-                getPattern  : function (html){
-                    function getParent (child_tag) {
-                        if (typeof child_tag === 'string') {
-                            if (settings.compatibility.CHILD_TO_PARENT[child_tag] !== void 0) {
-                                return document.createElement(settings.compatibility.CHILD_TO_PARENT[child_tag]);
-                            } else {
-                                return document.createElement(settings.compatibility.BASE);
-                            }
-                        } else {
-                            return null;
-                        }
-                    };
-                    function getTag(html) {
-                        var tag = html.match(settings.regs.FIRST_TAG);
-                        if (tag !== null) {
-                            if (tag.length === 1) {
-                                return tag[0].replace(settings.regs.TAG_BORDERS, '').replace(/\s/gi, '').match(settings.regs.FIRST_WORD)[0].toLowerCase()
-                            }
-                        }
-                        return null;
-                    }
-                    var tag = getTag(html);
+                getPattern              : function (html){
+                    var tag = helpers.getFirstTag(html);
                     if (tag !== null){
-                        return getParent(tag);
+                        return helpers.getParentFor(tag);
                     }
                     return null;
                 },
-                getHash     : function (str){
+                getHash                 : function (str){
                     //Source: http://werxltd.com/wp/2010/05/13/javascript-implementation-of-javas-string-hashcode-method/
                     var hash = 0, i, chr, len;
                     if (str.length === 0) return hash;
@@ -3882,6 +4402,75 @@
                         hash |= 0; // Convert to 32bit integer
                     }
                     return hash.toString();
+                },
+                getFirstTag             : function (html) {
+                    var tag = html.match(settings.regs.FIRST_TAG);
+                    if (tag !== null) {
+                        if (tag.length === 1) {
+                            return tag[0].replace(settings.regs.TAG_BORDERS, '').replace(/\s/gi, '').match(settings.regs.FIRST_WORD)[0].toLowerCase()
+                        }
+                    }
+                    return null;
+                },
+                getParentFor            : function (child_tag) {
+                    if (typeof child_tag === 'string') {
+                        if (settings.compatibility.CHILD_TO_PARENT[child_tag] !== void 0) {
+                            return document.createElement(settings.compatibility.CHILD_TO_PARENT[child_tag]);
+                        } else {
+                            return document.createElement(settings.compatibility.BASE);
+                        }
+                    } else {
+                        return null;
+                    }
+                },
+                getFirstTagWithContect  : function (html) {
+                    function replace(reg) {
+                        var replaced = {
+                            value   : _html.match(reg),
+                            mark    : flex.unique()
+                        };
+                        replaced.value  = replaced.value[0];
+                        _html           = _html.replace(reg, replaced.mark);
+                        cache.replaced.push(replaced);
+                    };
+                    var tag         = html.match(/<\s*\w{1,}/gi),
+                        close       = null,
+                        full        = null,
+                        open        = null,
+                        result      = null,
+                        close_pos   = null,
+                        open_pos    = null,
+                        cache       = {
+                            start   : { mark: null, value: null },
+                            replaced: []
+                        },
+                        _html       = html;
+                    if (tag instanceof Array && tag.length > 0) {
+                        cache.start.mark    = flex.unique();
+                        cache.start.value   = tag[0];
+                        _html               = _html.replace(cache.start.value, cache.start.mark);
+                        tag                 = tag[0].replace(/<\s*/gi, '');
+                        close               = new RegExp('<\\s*\/\\s*' + tag + '\\s*>', 'i');
+                        open                = new RegExp('<\s*' + tag + '.*?>', 'i');
+                        do {
+                            close_pos   = _html.search(close);
+                            open_pos    = _html.search(open);
+                            if (open_pos !== -1 && open_pos < close_pos) {
+                                replace(open);
+                                replace(close);
+                            } else {
+                                result = ~close_pos ?_html.substring(0, close_pos) + _html.match(close)[0] : null;
+                                break;
+                            }
+                        } while (open_pos !== -1 && open_pos < close_pos);
+                        if (result !== null) {
+                            result = result.replace(cache.start.mark, cache.start.value);
+                            cache.replaced.forEach(function (replaced) {
+                                result = result.replace(replaced.mark, replaced.value);
+                            });
+                        }
+                    }
+                    return result;
                 }
             };
             callers         = {
@@ -3938,7 +4527,8 @@
                 },
                 setup       : config.setup,
                 debug       : config.debug,
-                layout      : layout.init
+                layout      : layout.init,
+                url         : addition.url.create
             };
             //Global callers
             callers.init();
@@ -3959,7 +4549,8 @@
                 },
                 setup   : privates.setup,
                 debug   : privates.debug,
-                layout  : privates.layout
+                layout  : privates.layout,
+                url     : privates.url
             };
         };
         flex.modules.attach({

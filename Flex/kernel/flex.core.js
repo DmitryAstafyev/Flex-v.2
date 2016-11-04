@@ -245,7 +245,7 @@
                 urls    : {
                     PARAMS          : /\?.*/gi,
                     EXTENSION       : /(\.[\w\n]*)$/gi,
-                    JS_URL          : /[\w]*:\/\/[\w\n:\/\.]*\.js/gi,
+                    JS_URL          : /[\w]*:\/\/[\w\n:\/\.\-\_\%]*\.js/gi,
                     NOT_URL_SYMBOLS : /[\s\t\n\r]/gi,
                     JS_EXP_IN_URL   : /\.js$/gi,
                     CSS_EXP_IN_URL  : /\.css$/gi
@@ -509,7 +509,7 @@
                         parse           : function (response){
                             var result = {
                                     original: response,
-                                    parsed  : null
+                                    parsed  : void 0
                                 };
                             try {
                                 //Try get JSON object
@@ -1025,10 +1025,10 @@
                                             status = false;
                                             try {
                                                 property.type.forEach(function (type) {
-                                                    if (type === "node") {
-                                                        if (object[property.name]) {
-                                                            status = (object[property.name].nodeName ? true : status);
-                                                        }
+                                                    if (typeof type === 'function') {
+                                                        status = (object[property.name] instanceof Array === true ? true : status);
+                                                    } else if (type === "node") {
+                                                        object[property.name] !== void 0 && (status = (object[property.name].nodeName ? true : status));
                                                     } else if (type === "array") {
                                                         status = (object[property.name] instanceof Array === true ? true : status);
                                                     } else if (window[type] !== void 0 && ['string', 'number', 'bool'].indexOf(type) === -1){
@@ -5090,20 +5090,23 @@
                 }
             },
             overhead        : {
-                globaly: {
+                globaly : {
                     set: overhead.globaly.set,
                     get: overhead.globaly.get,
                     del: overhead.globaly.remove
                 },
-                objecty: {
+                objecty : {
                     set: overhead.objecty.set,
                     get: overhead.objecty.get,
                     del: overhead.objecty.remove
                 },
                 register: {
-                    open: overhead.register.open,
-                    add : overhead.register.add,
-                    done: overhead.register.done,
+                    open    : overhead.register.open,
+                    add     : overhead.register.add,
+                    done    : overhead.register.done,
+                    isIn    : overhead.register.isIn,
+                    isDone  : overhead.register.isDone,
+                    isReady : overhead.register.isReady,
                 }
             },
             ajax            : {
@@ -5238,20 +5241,23 @@
                 }
             },
             overhead        : {
-                globaly: {
+                globaly : {
                     set: privates.overhead.globaly.set,
                     get: privates.overhead.globaly.get,
                     del: privates.overhead.globaly.del
                 },
-                objecty: {
+                objecty : {
                     set: privates.overhead.objecty.set,
                     get: privates.overhead.objecty.get,
                     del: privates.overhead.objecty.del
                 },
                 register: {
-                    open: privates.overhead.register.open,
-                    add : privates.overhead.register.add,
-                    done: privates.overhead.register.done,
+                    open    : privates.overhead.register.open,
+                    add     : privates.overhead.register.add,
+                    done    : privates.overhead.register.done,
+                    isIn    : privates.overhead.register.isIn,
+                    isDone  : privates.overhead.register.isDone,
+                    isReady : privates.overhead.register.isReady,
                 }
             },
             ajax            : {
